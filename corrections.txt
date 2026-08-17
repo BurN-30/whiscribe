@@ -1,0 +1,29 @@
+# Corrections automatiques
+#
+# Une règle par ligne, au format :
+#     forme erronée => forme correcte
+#
+# Appliquées au texte final, après la transcription. La casse est ignorée
+# et seuls les mots entiers sont remplacés : la règle « git » ne touchera
+# donc pas « digital ». Les expressions de plusieurs mots fonctionnent.
+#
+# À nourrir au fil de l'eau : quand une transcription écorche toujours le
+# même mot, ajoutez la règle ici et le problème ne reviendra plus.
+#
+# Les lignes vides et celles commençant par « # » sont ignorées.
+#
+# Remplacez les exemples ci-dessous par vos propres corrections.
+
+# --- Noms propres régulièrement massacrés
+jean dupont => Jean Dupont
+mon entreprise => MonEntreprise
+
+# --- Outils et technologies
+guitte lab => GitLab
+guite lab => GitLab
+cubernetes => Kubernetes
+poste grès => PostgreSQL
+
+# --- Sigles entendus phonétiquement
+er gé pé dé => RGPD
+a pé i => API

@@ -1,0 +1,14 @@
+# Socle : transcription seule. Ni PyTorch, ni CUDA, ni compte en ligne.
+# faster-whisper n'utilise que CTranslate2, il n'a pas besoin de torch :
+# c'est ce qui permet une installation par défaut légère (environ 250 Mo).
+
+pywebview==6.1
+faster-whisper==1.2.1
+ctranslate2==4.7.1
+imageio-ffmpeg==0.6.0
+psutil==7.2.2
+
+# numpy est laissé sur une plage plutôt qu'une version exacte : les roues
+# disponibles dépendent de la version de Python du poste, et faster-whisper
+# comme ctranslate2 imposent déjà leurs bornes.
+numpy>=1.26,<3

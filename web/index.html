@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transcripteur local</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- Bibliothèque d'icônes, réutilisées par référence. -->
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-onde" viewBox="0 0 24 24"><path d="M2 12h2M7 6v12M12 3v18M17 7v10M22 12h-2"/></symbol>
+  <symbol id="i-cadenas" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-puce" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></symbol>
+  <symbol id="i-depot" viewBox="0 0 24 24"><path d="M12 16V4M12 4 7.5 8.5M12 4l4.5 4.5"/><path d="M4 16v2.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V16"/></symbol>
+  <symbol id="i-fichier" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-croix" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-coche" viewBox="0 0 24 24"><path d="M4 12.5 9.5 18 20 6.5"/></symbol>
+  <symbol id="i-alerte" viewBox="0 0 24 24"><path d="M12 3.5 1.8 20.5h20.4z"/><path d="M12 10v4.5M12 17.6v.1"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.1"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-dossier" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-lecture" viewBox="0 0 24 24"><path d="M6 4.5v15L19.5 12z"/></symbol>
+  <symbol id="i-arret" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+  <symbol id="i-livre" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H19v3H6.5"/></symbol>
+  <symbol id="i-personnes" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20v-1.5A4.5 4.5 0 0 1 7.5 14h3A4.5 4.5 0 0 1 15 18.5V20"/><path d="M16 5.2a3.2 3.2 0 0 1 0 5.9M17.5 14h.5a3.5 3.5 0 0 1 3.5 3.5V20"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/></symbol>
+  <symbol id="i-aide" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.3a2.7 2.7 0 0 1 5.2.9c0 1.8-2.6 2.3-2.6 4M12 17.2v.1"/></symbol>
+  <symbol id="i-reglages" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></symbol>
+  <symbol id="i-horloge" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.2l3.2 2"/></symbol>
+  <symbol id="i-corbeille" viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7"/></symbol>
+  <symbol id="i-externe" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8.5 8.5"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></symbol>
+</svg>
+
+<header class="entete">
+  <div class="marque">
+    <svg class="icone-l icone"><use href="#i-onde"></use></svg>
+    <h1>Transcripteur local</h1>
+    <span class="version" id="version"></span>
+  </div>
+  <span class="confidentialite" title="Aucune donnée ne quitte cette machine">
+    <svg class="icone-s icone"><use href="#i-cadenas"></use></svg>
+    100 % local
+  </span>
+  <span class="pousse"></span>
+  <button class="bouton-icone" id="btn-theme" title="Changer de thème" aria-label="Changer de thème">
+    <svg class="icone"><use href="#i-theme"></use></svg>
+  </button>
+  <button class="bouton-icone" id="btn-aide" title="Aide" aria-label="Aide">
+    <svg class="icone"><use href="#i-aide"></use></svg>
+  </button>
+</header>
+
+<main class="corps">
+
+  <!-- ============================ Colonne principale ==================== -->
+  <section class="colonne colonne-principale">
+
+    <!-- Matériel -->
+    <div class="carte">
+      <div class="materiel" id="materiel-entete" role="button" tabindex="0"
+           aria-expanded="false" aria-controls="materiel-detail">
+        <svg class="icone puce"><use href="#i-puce"></use></svg>
+        <div class="contenu">
+          <div class="resume" id="materiel-resume">Analyse du matériel...</div>
+          <div class="conseil" id="materiel-conseil"></div>
+        </div>
+        <svg class="icone chevron" id="materiel-chevron"><use href="#i-chevron"></use></svg>
+      </div>
+      <div class="materiel-detail" id="materiel-detail"></div>
+    </div>
+
+    <!-- Dépôt -->
+    <div class="zone-depot" id="zone-depot" role="button" tabindex="0">
+      <svg class="icone" style="width:32px;height:32px"><use href="#i-depot"></use></svg>
+      <div class="principal">Glissez vos enregistrements ici</div>
+      <div class="secondaire">ou cliquez pour parcourir vos fichiers</div>
+      <div class="formats">m4a, mp3, wav, ogg, flac, opus, webm, wma, et les vidéos courantes</div>
+    </div>
+
+    <!-- File et historique -->
+    <div class="carte" style="flex:1;display:flex;flex-direction:column;min-height:220px">
+      <div class="onglets" role="tablist">
+        <button class="onglet" role="tab" id="onglet-file" aria-selected="true" aria-controls="vue-file">
+          File d'attente <span class="compteur" id="compteur-file">0</span>
+        </button>
+        <button class="onglet" role="tab" id="onglet-historique" aria-selected="false" aria-controls="vue-historique">
+          Transcriptions <span class="compteur" id="compteur-historique">0</span>
+        </button>
+        <span class="pousse"></span>
+        <button class="bouton-discret bouton" id="btn-vider" style="margin:4px 6px">
+          <svg class="icone-s icone"><use href="#i-corbeille"></use></svg> Vider
+        </button>
+      </div>
+      <div class="liste" id="vue-file" role="tabpanel" style="overflow-y:auto;flex:1"></div>
+      <div class="liste historique" id="vue-historique" role="tabpanel" style="overflow-y:auto;flex:1;display:none"></div>
+    </div>
+
+  </section>
+
+  <!-- ============================== Réglages ============================ -->
+  <aside class="colonne colonne-laterale">
+
+    <div class="bloc-reglage">
+      <span class="titre-section">Qualité de transcription</span>
+      <div class="presets" id="presets"></div>
+      <div id="avertissements" style="margin-top:10px"></div>
+    </div>
+
+    <div class="bloc-reglage">
+      <span class="titre-section">Langue et sortie</span>
+      <div class="champ">
+        <label for="langue">Langue parlée</label>
+        <select id="langue">
+          <option value="fr">Français</option>
+          <option value="en">Anglais</option>
+          <option value="es">Espagnol</option>
+          <option value="de">Allemand</option>
+          <option value="it">Italien</option>
+          <option value="nl">Néerlandais</option>
+          <option value="pt">Portugais</option>
+          <option value="pl">Polonais</option>
+          <option value="ro">Roumain</option>
+          <option value="ar">Arabe</option>
+          <option value="auto">Détection automatique</option>
+        </select>
+      </div>
+      <div class="champ">
+        <label for="dossier-sortie">Dossier de sortie</label>
+        <div class="ligne-champ">
+          <input type="text" id="dossier-sortie" readonly>
+          <button class="bouton" id="btn-dossier" title="Choisir un dossier">
+            <svg class="icone-s icone"><use href="#i-dossier"></use></svg>
+          </button>
+          <button class="bouton" id="btn-ouvrir-dossier" title="Ouvrir le dossier">
+            <svg class="icone-s icone"><use href="#i-externe"></use></svg>
+          </button>
+        </div>
+      </div>
+      <div class="champ">
+        <label>Formats produits</label>
+        <div class="cases">
+          <label class="case"><input type="checkbox" id="fmt-txt" checked> Texte (.txt)</label>
+          <label class="case"><input type="checkbox" id="fmt-srt"> Sous-titres (.srt)</label>
+          <label class="case"><input type="checkbox" id="fmt-vtt"> Sous-titres (.vtt)</label>
+        </div>
+        <label class="case" style="margin-top:6px">
+          <input type="checkbox" id="fmt-horodatage"> Horodater chaque paragraphe du texte
+        </label>
+      </div>
+    </div>
+
+    <div class="bloc-reglage">
+      <span class="titre-section">Vocabulaire</span>
+      <p class="aide" style="font-size:12.5px;color:var(--texte-doux);margin-bottom:10px">
+        Les noms propres, sociétés et termes anglais sont ce que la transcription
+        écorche le plus. Deux réglages y répondent.
+      </p>
+      <label class="bascule">
+        <input type="checkbox" id="opt-glossaire" checked>
+        <span class="piste"></span>
+        <span>
+          <span class="libelle">Souffler le glossaire au modèle</span><br>
+          <span class="sous-libelle" id="etat-glossaire">--</span>
+        </span>
+      </label>
+      <label class="bascule">
+        <input type="checkbox" id="opt-corrections" checked>
+        <span class="piste"></span>
+        <span>
+          <span class="libelle">Appliquer les corrections</span><br>
+          <span class="sous-libelle" id="etat-corrections">--</span>
+        </span>
+      </label>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="bouton" id="btn-glossaire" style="flex:1">
+          <svg class="icone-s icone"><use href="#i-livre"></use></svg> Glossaire
+        </button>
+        <button class="bouton" id="btn-corrections" style="flex:1">
+          <svg class="icone-s icone"><use href="#i-reglages"></use></svg> Corrections
+        </button>
+      </div>
+    </div>
+
+    <div class="bloc-reglage">
+      <span class="titre-section">Locuteurs</span>
+      <label class="bascule">
+        <input type="checkbox" id="opt-diarisation">
+        <span class="piste"></span>
+        <span>
+          <span class="libelle">Séparer les locuteurs</span><br>
+          <span class="sous-libelle" id="etat-diarisation">--</span>
+        </span>
+      </label>
+      <div id="bloc-locuteurs" style="display:none;margin-top:10px">
+        <div class="champ">
+          <label for="nb-locuteurs">Nombre de participants</label>
+          <select id="nb-locuteurs">
+            <option value="0">Détection automatique</option>
+            <option value="2">2</option><option value="3">3</option>
+            <option value="4">4</option><option value="5">5</option>
+            <option value="6">6</option><option value="7">7</option>
+            <option value="8">8</option><option value="10">10</option>
+          </select>
+          <span class="aide">Préciser le nombre exact améliore nettement le découpage.</span>
+        </div>
+      </div>
+      <button class="bouton" id="btn-jeton" style="width:100%;margin-top:8px">
+        <svg class="icone-s icone"><use href="#i-personnes"></use></svg>
+        <span id="libelle-jeton">Configurer l'accès</span>
+      </button>
+    </div>
+
+    <div class="bloc-reglage">
+      <label class="bascule">
+        <input type="checkbox" id="opt-avance">
+        <span class="piste"></span>
+        <span>
+          <span class="libelle">Mode avancé</span><br>
+          <span class="sous-libelle">Modèle, faisceau, filtres audio</span>
+        </span>
+      </label>
+      <div id="bloc-avance" style="display:none;margin-top:12px">
+        <div class="champ">
+          <label for="modele-avance">Modèle</label>
+          <select id="modele-avance"></select>
+          <span class="aide">Vide, c'est le modèle du preset qui s'applique.</span>
+        </div>
+        <div class="champ">
+          <label for="beam">Largeur de faisceau <span id="valeur-beam" style="color:var(--texte-faible)"></span></label>
+          <input type="number" id="beam" min="1" max="10" step="1">
+          <span class="aide">Plus large, meilleure qualité, plus lent. 5 à 10 pour les réunions.</span>
+        </div>
+        <label class="bascule">
+          <input type="checkbox" id="opt-contexte" checked>
+          <span class="piste"></span>
+          <span>
+            <span class="libelle">Garder le contexte</span><br>
+            <span class="sous-libelle">À couper si le texte se met à boucler</span>
+          </span>
+        </label>
+        <label class="bascule">
+          <input type="checkbox" id="opt-salle">
+          <span class="piste"></span>
+          <span>
+            <span class="libelle">Audio de salle</span><br>
+            <span class="sous-libelle">Filtre les basses, normalise le volume</span>
+          </span>
+        </label>
+        <label class="bascule">
+          <input type="checkbox" id="opt-processeur">
+          <span class="piste"></span>
+          <span>
+            <span class="libelle">Forcer le processeur</span><br>
+            <span class="sous-libelle">Contourne un souci de carte graphique</span>
+          </span>
+        </label>
+      </div>
+    </div>
+
+  </aside>
+</main>
+
+<!-- ================================= Pied ============================== -->
+<footer class="pied">
+  <div class="journal-entete" id="journal-entete" role="button" tabindex="0" aria-expanded="false">
+    <svg class="icone-s icone chevron"><use href="#i-chevron"></use></svg>
+    <span class="journal-titre">Journal</span>
+    <span class="journal-dernier" id="journal-dernier">Prêt.</span>
+    <button class="bouton-lien" id="btn-fichier-log">Ouvrir le fichier détaillé</button>
+  </div>
+  <div class="journal-contenu" id="journal-contenu"></div>
+  <div class="actions">
+    <div class="etat-global" id="etat-global">
+      <span class="point"></span>
+      <span class="texte" id="etat-texte">Prêt</span>
+    </div>
+    <span class="pousse"></span>
+    <button class="bouton bouton-danger" id="btn-arreter" disabled>
+      <svg class="icone-s icone"><use href="#i-arret"></use></svg> Arrêter
+    </button>
+    <button class="bouton bouton-accent" id="btn-lancer" disabled>
+      <svg class="icone-s icone"><use href="#i-lecture"></use></svg> Lancer la transcription
+    </button>
+  </div>
+</footer>
+
+<!-- ================================ Modales =========================== -->
+
+<div class="voile" id="modale-glossaire">
+  <div class="modale modale-large">
+    <div class="modale-entete">
+      <svg class="icone"><use href="#i-livre"></use></svg>
+      <h2>Glossaire de vocabulaire</h2>
+      <button class="bouton-icone" data-fermer><svg class="icone"><use href="#i-croix"></use></svg></button>
+    </div>
+    <div class="modale-corps">
+      <p>
+        Un terme par ligne : prénoms, noms de sociétés, produits, sigles. Ces mots
+        sont soufflés au modèle avant qu'il ne transcrive, ce qui l'oriente vers
+        la bonne orthographe.
+      </p>
+      <div class="encart encart-info" style="margin-bottom:12px">
+        <svg class="icone-s icone"><use href="#i-info"></use></svg>
+        <span>
+          Le modèle n'accepte qu'une amorce courte, 224 jetons au maximum.
+          Placez les termes les plus importants <strong>en haut</strong> de la
+          liste : au-delà de la limite, les suivants sont ignorés.
+        </span>
+      </div>
+      <textarea id="zone-glossaire" spellcheck="false"></textarea>
+      <div id="retour-glossaire" style="margin-top:10px"></div>
+    </div>
+    <div class="modale-pied">
+      <span class="pousse"></span>
+      <button class="bouton" data-fermer>Annuler</button>
+      <button class="bouton bouton-accent" id="btn-enregistrer-glossaire">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="voile" id="modale-corrections">
+  <div class="modale modale-large">
+    <div class="modale-entete">
+      <svg class="icone"><use href="#i-reglages"></use></svg>
+      <h2>Corrections automatiques</h2>
+      <button class="bouton-icone" data-fermer><svg class="icone"><use href="#i-croix"></use></svg></button>
+    </div>
+    <div class="modale-corps">
+      <p>
+        Une règle par ligne, au format <code>forme erronée =&gt; forme correcte</code>.
+        La casse est ignorée et seuls les mots entiers sont remplacés, donc
+        « git » ne touchera pas « digital ». Les corrections sont appliquées au
+        texte final, après la transcription.
+      </p>
+      <textarea id="zone-corrections" spellcheck="false"></textarea>
+      <div id="retour-corrections" style="margin-top:10px"></div>
+    </div>
+    <div class="modale-pied">
+      <span class="pousse"></span>
+      <button class="bouton" data-fermer>Annuler</button>
+      <button class="bouton bouton-accent" id="btn-enregistrer-corrections">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="voile" id="modale-jeton">
+  <div class="modale">
+    <div class="modale-entete">
+      <svg class="icone"><use href="#i-personnes"></use></svg>
+      <h2>Séparation des locuteurs</h2>
+      <button class="bouton-icone" data-fermer><svg class="icone"><use href="#i-croix"></use></svg></button>
+    </div>
+    <div class="modale-corps">
+      <div id="etat-diarisation-modale"></div>
+      <p>
+        Le modèle qui reconnaît les voix est mis à disposition gratuitement, mais
+        son auteur demande d'accepter ses conditions et de s'identifier par un
+        jeton. Trois étapes, une seule fois.
+      </p>
+      <ol id="etapes-jeton"></ol>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button class="bouton" id="btn-lien-conditions">
+          <svg class="icone-s icone"><use href="#i-externe"></use></svg> Page du modèle
+        </button>
+        <button class="bouton" id="btn-lien-jeton">
+          <svg class="icone-s icone"><use href="#i-externe"></use></svg> Créer un jeton
+        </button>
+      </div>
+      <div class="champ">
+        <label for="champ-jeton">Jeton d'accès</label>
+        <input type="password" id="champ-jeton" placeholder="hf_..." spellcheck="false">
+        <span class="aide">
+          Enregistré dans <code>jeton_hf.txt</code>, à côté de l'application.
+          Ce fichier n'est jamais versionné.
+        </span>
+      </div>
+      <div id="retour-jeton"></div>
+      <div class="encart encart-info" style="margin-top:12px">
+        <svg class="icone-s icone"><use href="#i-info"></use></svg>
+        <span>Sans jeton, la transcription fonctionne normalement, simplement sans étiquettes de locuteur.</span>
+      </div>
+    </div>
+    <div class="modale-pied">
+      <button class="bouton bouton-discret" id="btn-effacer-jeton">Effacer le jeton</button>
+      <span class="pousse"></span>
+      <button class="bouton" data-fermer>Fermer</button>
+      <button class="bouton bouton-accent" id="btn-enregistrer-jeton">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="voile" id="modale-apercu">
+  <div class="modale modale-large">
+    <div class="modale-entete">
+      <svg class="icone"><use href="#i-fichier"></use></svg>
+      <h2 id="titre-apercu">Aperçu</h2>
+      <button class="bouton-icone" data-fermer><svg class="icone"><use href="#i-croix"></use></svg></button>
+    </div>
+    <div class="modale-corps">
+      <div class="apercu" id="contenu-apercu"></div>
+    </div>
+    <div class="modale-pied">
+      <button class="bouton" id="btn-copier-apercu">Copier le texte</button>
+      <span class="pousse"></span>
+      <button class="bouton" id="btn-ouvrir-apercu">Ouvrir le fichier</button>
+      <button class="bouton bouton-accent" data-fermer>Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div class="voile" id="modale-aide">
+  <div class="modale modale-large">
+    <div class="modale-entete">
+      <svg class="icone"><use href="#i-aide"></use></svg>
+      <h2>Aide</h2>
+      <button class="bouton-icone" data-fermer><svg class="icone"><use href="#i-croix"></use></svg></button>
+    </div>
+    <div class="modale-corps">
+      <h3>Ce que fait cet outil</h3>
+      <p>
+        Il convertit des enregistrements audio en texte, entièrement sur votre
+        machine. Aucun fichier, aucun extrait, aucune métadonnée n'est envoyé sur
+        Internet. Les modèles sont téléchargés une seule fois, puis tout
+        fonctionne hors connexion.
+      </p>
+
+      <h3>Les deux presets</h3>
+      <div class="defilable">
+        <table class="tableau">
+          <thead><tr><th>Preset</th><th>Modèle</th><th>Pour quoi</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Qualité maximale</strong></td><td>large-v3</td>
+              <td>Réunions, entretiens, tout ce qui sera relu ou résumé ensuite. On lance et on laisse tourner.</td>
+            </tr>
+            <tr>
+              <td><strong>Rapide</strong></td><td>large-v3-turbo</td>
+              <td>Environ quatre fois plus rapide, qualité un cran en dessous. Pour dégrossir vite.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Vocabulaire et corrections</h3>
+      <p>
+        Le <strong>glossaire</strong> est soufflé au modèle avant la transcription
+        et l'oriente vers la bonne orthographe des noms propres. Les
+        <strong>corrections</strong> réparent après coup les erreurs récurrentes
+        que le glossaire n'a pas suffi à éviter.
+      </p>
+
+      <h3>Raccourcis</h3>
+      <ul>
+        <li><code>Ctrl</code> + <code>Entrée</code> : lancer la file</li>
+        <li><code>Échap</code> : fermer la fenêtre ouverte</li>
+        <li><code>Ctrl</code> + <code>+</code> / <code>-</code> / <code>0</code> : zoom</li>
+      </ul>
+
+      <h3>Quand quelque chose ne va pas</h3>
+      <p>
+        Chaque échec est expliqué en clair dans la file, et le détail technique
+        complet est écrit dans le fichier de journal, ouvrable depuis la barre du bas.
+      </p>
+    </div>
+    <div class="modale-pied">
+      <button class="bouton bouton-discret" id="btn-ouvrir-app">Ouvrir le dossier de l'application</button>
+      <span class="pousse"></span>
+      <button class="bouton bouton-accent" data-fermer>Fermer</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+# Environnement et cache Python
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+
+# Propre au poste : chemins locaux, préférences, secrets
+config.json
+jeton_hf.txt
+
+# Produits par l'application
+logs/
+modeles/
+_ffmpeg/
+
+# Système
+Thumbs.db
+desktop.ini
+.DS_Store

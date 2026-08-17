@@ -1,0 +1,24 @@
+{
+  "preset": "qualite",
+  "langue": "fr",
+  "dossier_sortie": "",
+  "diarisation": true,
+  "nb_locuteurs": 0,
+  "formats": {
+    "txt": true,
+    "srt": false,
+    "vtt": false,
+    "horodatage": false
+  },
+  "appliquer_corrections": true,
+  "utiliser_glossaire": true,
+  "filtres_salle": false,
+  "mode_avance": false,
+  "modele_avance": "",
+  "beam_size": 0,
+  "condition_on_previous_text": true,
+  "forcer_processeur": false,
+  "theme": "auto",
+  "zoom": 1.0,
+  "journal_ouvert": false
+}

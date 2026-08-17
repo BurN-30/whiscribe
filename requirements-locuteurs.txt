@@ -1,0 +1,7 @@
+# Séparation des locuteurs, optionnelle. Environ 2,5 Go de plus.
+# PyTorch doit être installé AVANT ce fichier, avec l'index adapté au matériel :
+#   sans carte NVIDIA : pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+#   avec carte NVIDIA : pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu124
+# « installer.bat » s'en charge automatiquement.
+
+pyannote.audio==4.0.4

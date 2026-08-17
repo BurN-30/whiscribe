@@ -1,0 +1,33 @@
+# Glossaire de vocabulaire
+#
+# Un terme par ligne. Ces mots sont soufflés au modèle avant qu'il ne
+# transcrive, ce qui l'oriente vers la bonne orthographe.
+#
+# IMPORTANT : l'amorce du modèle est limitée à 224 jetons, soit une petite
+# centaine de termes. Placez les plus importants EN HAUT : au-delà de la
+# limite, les suivants sont ignorés. L'application vous prévient quand la
+# liste est tronquée.
+#
+# Les lignes vides et celles commençant par « # » sont ignorées.
+#
+# Remplacez les exemples ci-dessous par votre propre vocabulaire.
+
+# --- Personnes (prénoms et noms des participants habituels)
+Jean Dupont
+Marie Lefèvre
+Karim Benali
+
+# --- Organisations
+MonEntreprise
+Direction des systèmes d'information
+
+# --- Produits, outils et technologies
+GitLab
+Kubernetes
+Active Directory
+PostgreSQL
+
+# --- Sigles et jargon interne
+RGPD
+API
+SSO
