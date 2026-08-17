@@ -424,8 +424,9 @@ begin
   Occupe := TailleDossier(DossierModeles);
   if Occupe > 0 then
   begin
-    if MsgBox(FmtMessage(ExpandConstant('{cm:DesinstallerModeles}'),
-                         [TailleLisible(Occupe), DossierModeles]),
+    { Le crochet ne doit jamais ouvrir la ligne : Inno Setup y verrait un début de section, même dans [Code]. }
+    if MsgBox(FmtMessage(ExpandConstant('{cm:DesinstallerModeles}'), [
+                TailleLisible(Occupe), DossierModeles]),
               mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
     begin
       DelTree(DossierModeles, True, True, True);
