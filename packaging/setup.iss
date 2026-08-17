@@ -16,13 +16,13 @@
 ;      configuration, ni le glossaire, ni les corrections, ni les modèles.
 ;
 ;  Compilation :
-;      iscc /DVersionApp=2.0.0 packaging\setup.iss
+;      iscc /DVersionApp=2.1.0 packaging\setup.iss
 ;
 ;  Le dossier « dist\WhiScribe » doit exister au préalable.
 ; ===========================================================================
 
 #ifndef VersionApp
-  #define VersionApp "2.0.0"
+  #define VersionApp "2.1.0"
 #endif
 
 #define NomApp        "WhiScribe"
@@ -399,6 +399,8 @@ begin
   DeleteFile(Base + '\dossier-modeles.txt');
   DeleteFile(Base + '\vocabulaire.txt');
   DeleteFile(Base + '\corrections.txt');
+  { Sauvegardes automatiques posées avant chaque import de données. }
+  DelTree(Base + '\whiscribe-donnees-avant-import-*.zip', False, True, False);
   DelTree(Base + '\logs', True, True, True);
   { Ne part que si les modèles n'y sont plus, donc jamais dans ce cas de figure. }
   RemoveDir(Base);

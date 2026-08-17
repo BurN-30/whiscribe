@@ -30,6 +30,8 @@
   <symbol id="i-reglages" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></symbol>
   <symbol id="i-horloge" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.2l3.2 2"/></symbol>
   <symbol id="i-corbeille" viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7"/></symbol>
+  <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 3v12M12 3 8 7M12 3l4 4"/><path d="M4 15v3.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V15"/></symbol>
+  <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 15V3M12 15l-4-4M12 15l4-4"/><path d="M4 15v3.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V15"/></symbol>
   <symbol id="i-externe" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8.5 8.5"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></symbol>
 </svg>
 
@@ -226,6 +228,25 @@
       </div>
       <span class="aide" id="aide-modeles"></span>
       <div id="retour-modeles"></div>
+    </div>
+
+    <div class="bloc-reglage">
+      <span class="titre-section">Mes données</span>
+      <div class="sous-libelle" id="etat-donnees">Glossaire, corrections et réglages</div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="bouton" id="btn-exporter-donnees" style="flex:1">
+          <svg class="icone-s icone"><use href="#i-export"></use></svg> Exporter mes données
+        </button>
+        <button class="bouton" id="btn-importer-donnees" style="flex:1">
+          <svg class="icone-s icone"><use href="#i-import"></use></svg> Importer des données
+        </button>
+      </div>
+      <span class="aide">
+        Un seul fichier zip pour sauvegarder votre glossaire professionnel ou le
+        porter sur un autre poste, sans dépôt Git ni service en ligne.
+        Le jeton Hugging Face, les journaux et les modèles n'y sont jamais mis.
+      </span>
+      <div id="retour-donnees"></div>
     </div>
 
     <div class="bloc-reglage">
@@ -429,6 +450,25 @@
       <span class="pousse"></span>
       <button class="bouton" data-fermer>Fermer</button>
       <button class="bouton bouton-accent" id="btn-enregistrer-jeton">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="voile" id="modale-import">
+  <div class="modale">
+    <div class="modale-entete">
+      <svg class="icone"><use href="#i-import"></use></svg>
+      <h2>Importer des données</h2>
+      <button class="bouton-icone" data-fermer><svg class="icone"><use href="#i-croix"></use></svg></button>
+    </div>
+    <div class="modale-corps">
+      <p id="source-import"></p>
+      <div id="apercu-import"></div>
+    </div>
+    <div class="modale-pied">
+      <span class="pousse"></span>
+      <button class="bouton" data-fermer>Annuler</button>
+      <button class="bouton bouton-accent" id="btn-confirmer-import">Remplacer mes données</button>
     </div>
   </div>
 </div>

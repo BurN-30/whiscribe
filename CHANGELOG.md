@@ -6,6 +6,43 @@ version : la chaîne de publication en extrait la section correspondant au tag.
 
 ---
 
+## 2.1.0
+
+Import et export des données personnelles par fichier. Un glossaire
+professionnel se construit sur des mois et n'a pas sa place dans un dépôt en
+ligne : un seul fichier zip suffit désormais à le sauvegarder ou à le porter
+sur un autre poste.
+
+**Nouveau panneau « Mes données », dans les réglages**
+
+- **Exporter mes données** écrit une archive `whiscribe-donnees-AAAA-MM-JJ.zip`
+  à l'emplacement choisi : glossaire, corrections, réglages, et un manifeste
+  qui note la version de l'application, la date et la liste des fichiers.
+- Le **jeton Hugging Face n'est jamais exporté**, c'est un secret personnel.
+  Les modèles et les journaux non plus. L'interface le dit à l'écran.
+- **Importer des données** relit une archive de ce type. L'archive est
+  validée avant tout : zip réellement lisible, manifeste présent et cohérent,
+  aucun fichier inattendu, aucun chemin qui sortirait de l'archive, tailles
+  bornées.
+- Un **aperçu** s'affiche avant la moindre écriture : nombre de termes et de
+  règles apportés face à ceux déjà en place, réglages qui changeraient avec
+  leur valeur avant et après. Il faut confirmer pour que quoi que ce soit soit
+  remplacé.
+- **Sauvegarde automatique avant tout import**, dans
+  `whiscribe-donnees-avant-import-AAAA-MM-JJ-HHMMSS.zip`, posée dans le
+  dossier de vos données, dont l'emplacement est affiché. Si cette sauvegarde
+  échoue, l'import est annulé plutôt que risqué. Elle se réimporte comme
+  n'importe quel export pour revenir en arrière.
+- Le **dossier de sortie et le dossier des modèles ne sont repris que s'ils
+  existent** sur le poste d'arrivée. Sinon les valeurs locales sont conservées
+  et l'aperçu le signale.
+- L'interface se recharge seule après un import : ni redémarrage ni
+  manipulation.
+- Les refus sont expliqués en français, du fichier corrompu à l'archive qui
+  n'est pas un export WhiScribe, et toutes les opérations sont journalisées.
+
+---
+
 ## 2.0.0
 
 Première version installable. Jusqu'ici, faire tourner l'outil demandait

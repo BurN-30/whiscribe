@@ -120,6 +120,23 @@ Appliquées au texte final. **Insensible à la casse**, **mot entier uniquement*
 
 Les deux fichiers s'éditent directement, ou depuis les panneaux de l'application. Les exemples livrés sont génériques : remplacez-les par votre vocabulaire.
 
+### Sauvegarder et transporter ses données
+
+Un glossaire professionnel se construit sur des mois, et il n'a rien à faire en ligne : noms de collaborateurs, de clients, de projets internes. Le réflexe « je le mets dans un dépôt privé » demande un compte, un client Git, et expose quand même la liste à un hébergeur. **La réponse de WhiScribe est un fichier**, et rien d'autre.
+
+Panneau **« Mes données »**, dans la colonne des réglages :
+
+- **Exporter mes données** produit une archive `whiscribe-donnees-AAAA-MM-JJ.zip` à l'emplacement de votre choix. Elle contient le glossaire, les corrections, les réglages, et un petit manifeste (version, date, liste des fichiers). Rangez-la où vous voulez : clé USB, partage de service, sauvegarde d'entreprise.
+- **Importer des données** relit une de ces archives. Le fichier est d'abord validé, puis un **aperçu** annonce ce qui va changer, nombre de termes, nombre de règles, réglages concernés. Rien n'est écrit avant votre confirmation.
+
+Trois garanties qui font que cela reste sûr :
+
+1. **Le jeton Hugging Face n'est jamais exporté.** C'est un secret personnel, il reste sur la machine. Les modèles et les journaux non plus : les premiers se retéléchargent seuls, les seconds ne décrivent que le poste qui les a écrits.
+2. **Rien n'est écrasé sans filet.** Juste avant d'appliquer un import, l'état courant part dans `whiscribe-donnees-avant-import-AAAA-MM-JJ-HHMMSS.zip`, déposé dans le dossier de vos données, et l'application vous dit où. Ce fichier se réimporte de la même façon pour revenir en arrière.
+3. **Les chemins ne suivent pas bêtement.** Le dossier de sortie et le dossier des modèles ne sont repris que s'ils existent réellement sur le poste d'arrivée. Sinon vos valeurs locales sont conservées, et l'aperçu le dit avant l'import.
+
+Une archive qui n'est pas un export WhiScribe, abîmée, trafiquée ou produite par une version plus récente est refusée avec la raison en clair, sans avoir touché à quoi que ce soit.
+
 ---
 
 ## Séparation des locuteurs

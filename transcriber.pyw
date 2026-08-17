@@ -211,7 +211,7 @@ from webview.dom import DOMEventHandler  # noqa: E402
 
 from app import audio as audio_module  # noqa: E402
 from app import config as config_module  # noqa: E402
-from app import diarisation, materiel, presets, traitement, vocabulaire  # noqa: E402
+from app import diarisation, donnees, materiel, presets, traitement, vocabulaire  # noqa: E402
 
 _SANS_FENETRE = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
@@ -480,6 +480,69 @@ class Passerelle:
             "ok": True,
             "message": "Jeton enregistré. Il sera vérifié au premier usage de la séparation des locuteurs.",
         }
+
+    # -- import et export des données personnelles -------------------------
+
+    def _dossier_de_depart(self) -> str:
+        """Dossier proposé dans les boîtes de dialogue d'import et d'export."""
+        candidat = Path(self.config.get("dossier_sortie") or "")
+        if candidat.is_dir():
+            return str(candidat)
+        documents = Path.home() / "Documents"
+        return str(documents if documents.is_dir() else Path.home())
+
+    def exporter_donnees(self) -> None:
+        self._fond(self._dialogue_export)
+
+    def _dialogue_export(self) -> None:
+        try:
+            resultat = self._fenetre.create_file_dialog(
+                webview.SAVE_DIALOG,
+                directory=self._dossier_de_depart(),
+                save_filename=donnees.nom_export_propose(),
+                file_types=("Archive de données WhiScribe (*.zip)",),
+            )
+        except Exception as exc:
+            journal.exception("Ouverture de la boîte d'enregistrement impossible", exc)
+            refus = {
+                "ok": False,
+                "message": "La fenêtre d'enregistrement n'a pas pu s'ouvrir.",
+            }
+            self._js(f"onExportDonnees({_json(refus)})")
+            return
+        if not resultat:
+            return
+        chemin = resultat[0] if isinstance(resultat, (list, tuple)) else resultat
+        self._js(f"onExportDonnees({_json(donnees.exporter(str(chemin)))})")
+
+    def choisir_import(self) -> None:
+        self._fond(self._dialogue_import)
+
+    def _dialogue_import(self) -> None:
+        try:
+            resultat = self._fenetre.create_file_dialog(
+                webview.OPEN_DIALOG,
+                directory=self._dossier_de_depart(),
+                file_types=("Archive de données WhiScribe (*.zip)", "Tous les fichiers (*.*)"),
+            )
+        except Exception as exc:
+            journal.exception("Ouverture du sélecteur de fichiers impossible", exc)
+            return
+        if not resultat:
+            return
+        chemin = resultat[0] if isinstance(resultat, (list, tuple)) else resultat
+        self._js(f"onApercuImport({_json(donnees.analyser(str(chemin)))})")
+
+    def appliquer_import(self, chemin: str) -> dict:
+        """Écrit réellement les données importées, après confirmation de l'utilisateur."""
+        retour = donnees.importer(chemin)
+        if retour.get("ok"):
+            # L'objet de configuration en mémoire est périmé dès cet instant.
+            self.config = config_module.charger()
+            retour["config"] = self.config
+            retour["avertissements"] = self._avertissements()
+            retour["modeles"] = self.infos_modeles()
+        return retour
 
     def estimation(self, duree_secs: float, cle_preset: str, diarisation_active: bool,
                    modele_avance: str = "") -> str:

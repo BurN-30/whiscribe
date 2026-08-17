@@ -17,6 +17,7 @@ const etat = {
   versionInstallee: false,
   enCours: false,
   apercuChemin: null,
+  importChemin: null,
   pret: false,
 };
 
@@ -299,6 +300,112 @@ function onDossierModeles(retour) {
   }
 }
 window.onDossierModeles = onDossierModeles;
+
+/* ------------------------------------------- Import et export des données */
+
+function onExportDonnees(retour) {
+  if (!retour) return;
+  $('#retour-donnees').innerHTML = retour.ok
+    ? encartSucces(retour.message) : encartAttention(retour.message);
+  journaliser(retour.ok ? 'ok' : 'erreur', retour.message);
+  if (retour.ok) setTimeout(() => { $('#retour-donnees').innerHTML = ''; }, 12000);
+}
+window.onExportDonnees = onExportDonnees;
+
+function onApercuImport(retour) {
+  if (!retour) return;
+  if (!retour.ok) {
+    $('#retour-donnees').innerHTML = encartAttention(retour.message);
+    journaliser('erreur', 'Import refusé : ' + retour.message);
+    return;
+  }
+  etat.importChemin = retour.chemin;
+  $('#retour-donnees').innerHTML = '';
+  $('#source-import').textContent = 'Fichier « ' + retour.nom + ' », exporté le '
+    + retour.manifeste.date + ' par la version ' + retour.manifeste.version + '.';
+  $('#apercu-import').innerHTML = apercuImportHTML(retour);
+  ouvrirModale('#modale-import');
+}
+window.onApercuImport = onApercuImport;
+
+function apercuImportHTML(d) {
+  const bloc = [];
+  const ligne = (cle, valeur) =>
+    `<div class="materiel-ligne"><span class="cle">${ech(cle)}</span>
+      <span class="valeur">${ech(valeur)}</span></div>`;
+
+  bloc.push('<h3>Ce que contient ce fichier</h3>');
+  bloc.push(ligne('Glossaire',
+    d.glossaire.nb + ' terme(s), au lieu de ' + d.glossaire.nb_actuel + ' actuellement'));
+  bloc.push(ligne('Corrections',
+    d.corrections.nb + ' règle(s), au lieu de ' + d.corrections.nb_actuel + ' actuellement'));
+  if (d.corrections.erreurs && d.corrections.erreurs.length) {
+    bloc.push(encartAttention(d.corrections.erreurs.length
+      + ' ligne(s) de corrections sont mal écrites dans ce fichier et seront sans effet.'));
+  }
+
+  bloc.push('<h3>Réglages qui changeraient</h3>');
+  if (!d.reglages.length) {
+    bloc.push('<p>Aucun réglage ne change.</p>');
+  } else {
+    d.reglages.forEach((r) => bloc.push(ligne(r.libelle, r.avant + '  →  ' + r.apres)));
+  }
+
+  if (d.chemins && d.chemins.length) {
+    bloc.push('<h3>Chemins propres à cette machine</h3>');
+    d.chemins.forEach((c) => {
+      bloc.push(c.repris ? encartInfo(c.message) : encartAttention(c.message));
+    });
+  }
+
+  bloc.push(encartInfo('Avant de remplacer quoi que ce soit, vos données actuelles seront '
+    + 'enregistrées dans « ' + d.dossier_sauvegarde + ' », sous le nom « ' + d.sauvegarde
+    + ' ». Rien n\'est écrasé sans filet.'));
+  return bloc.join('');
+}
+
+async function confirmerImport() {
+  if (!etat.importChemin) return;
+  const bouton = $('#btn-confirmer-import');
+  bouton.disabled = true;
+  try {
+    const r = await pywebview.api.appliquer_import(etat.importChemin);
+    if (!r.ok) {
+      $('#apercu-import').innerHTML = encartAttention(r.message);
+      journaliser('erreur', r.message);
+      return;
+    }
+    fermerModale($('#modale-import'));
+    etat.importChemin = null;
+    const messages = [r.message, r.message_sauvegarde].concat(r.notes || []);
+    $('#retour-donnees').innerHTML = encartSucces(r.message)
+      + [r.message_sauvegarde].concat(r.notes || []).map(encartInfo).join('');
+    messages.forEach((m) => journaliser('ok', m));
+    await rechargerApresImport();
+  } catch (e) {
+    console.error(e);
+    $('#apercu-import').innerHTML = encartAttention(
+      "L'import n'a pas pu être appliqué. Le détail est dans le journal.");
+  } finally {
+    bouton.disabled = false;
+  }
+}
+
+/* Recharge l'état complet de l'interface : un import change les réglages, le
+   glossaire et les corrections d'un seul coup, et un redémarrage serait une
+   corvée pour rien. */
+async function rechargerApresImport() {
+  try {
+    const d = await pywebview.api.etat_initial();
+    initialiser(d);
+    journaliser('info', 'Interface rechargée avec les données importées.');
+  } catch (e) {
+    console.error(e);
+    journaliser('attention',
+      "Les données sont importées, mais l'interface n'a pas pu se recharger : "
+      + 'fermez puis rouvrez WhiScribe pour les voir.');
+  }
+}
 
 async function rafraichirEstimations() {
   for (const [id, item] of etat.fichiers) {
@@ -709,6 +816,17 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   $('#btn-ouvrir-modeles').addEventListener('click', () =>
     pywebview.api.ouvrir_dossier_modeles());
+
+  // Import et export des données personnelles
+  $('#btn-exporter-donnees').addEventListener('click', () => {
+    $('#retour-donnees').innerHTML = '';
+    pywebview.api.exporter_donnees();
+  });
+  $('#btn-importer-donnees').addEventListener('click', () => {
+    $('#retour-donnees').innerHTML = '';
+    pywebview.api.choisir_import();
+  });
+  $('#btn-confirmer-import').addEventListener('click', confirmerImport);
 
   $('#opt-avance').addEventListener('change', (e) => {
     $('#bloc-avance').style.display = e.target.checked ? 'block' : 'none';

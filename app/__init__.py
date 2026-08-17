@@ -6,7 +6,7 @@ si une carte NVIDIA est detectee. Diarisation optionnelle via pyannote.audio,
 sequencee apres la transcription pour limiter le pic memoire.
 """
 
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 NOM_APPLICATION = "WhiScribe"
 
 # Source unique de l'adresse du depot. A ajuster une seule fois ici si le nom du
