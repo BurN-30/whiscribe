@@ -1,5 +1,5 @@
 """
-Installateur du Transcripteur local.
+Installateur du WhisperScribe.
 
 Relançable autant de fois qu'on veut : il ne réinstalle que ce qui manque et
 finit toujours par un bilan clair de l'état du poste.
@@ -319,7 +319,7 @@ def principal() -> int:
     analyseur.add_argument("--verifier", action="store_true")
     arguments, _ = analyseur.parse_known_args()
 
-    titre("Transcripteur local — installation")
+    titre("WhisperScribe — installation")
     print("  Transcription audio, 100 % sur votre machine.")
     print("  Rien de ce que vous transcrivez ne quitte ce poste.")
 

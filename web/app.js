@@ -1,5 +1,5 @@
 /* =========================================================================
-   Transcripteur local — logique d'interface
+   WhisperScribe — logique d'interface
 
    Le Python appelle les fonctions globales onXxx() définies plus bas.
    L'interface appelle Python via pywebview.api.*

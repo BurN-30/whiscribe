@@ -3,7 +3,7 @@ chcp 65001 >nul
 setlocal
 
 rem ===========================================================================
-rem  Transcripteur local - lancement
+rem  WhisperScribe - lancement
 rem  Utilise l'environnement isole cree par installer.bat.
 rem  La fenetre de console se ferme d'elle-meme : l'application a la sienne.
 rem ===========================================================================

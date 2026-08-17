@@ -1,5 +1,5 @@
 """
-Transcripteur local — point d'entrée.
+WhisperScribe — point d'entrée.
 
 Fenêtre pywebview, interface web dans `web/`, moteur faster-whisper.
 Tout se passe sur la machine : aucun envoi vers un service en ligne.

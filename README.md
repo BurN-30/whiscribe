@@ -1,4 +1,4 @@
-# Transcripteur local
+# WhisperScribe
 
 Application de bureau pour transcrire des enregistrements audio en texte, **entièrement sur votre machine**. Pensée pour les réunions : audio de salle, plusieurs voix, noms propres et jargon maison.
 

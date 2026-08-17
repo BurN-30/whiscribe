@@ -3,7 +3,7 @@ chcp 65001 >nul
 setlocal
 
 rem ===========================================================================
-rem  Transcripteur local - installation
+rem  WhisperScribe - installation
 rem  Double-cliquez sur ce fichier. Relancable autant de fois que necessaire.
 rem
 rem  Options :
