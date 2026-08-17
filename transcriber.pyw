@@ -1,10 +1,17 @@
 """
-WhisperScribe — point d'entrée.
+WhiScribe — point d'entrée.
 
 Fenêtre pywebview, interface web dans `web/`, moteur faster-whisper.
 Tout se passe sur la machine : aucun envoi vers un service en ligne.
 
 Lancement : double-clic sur ce fichier, ou « lancer.bat ».
+
+Option de diagnostic, utilisée par la chaîne de publication :
+
+    transcriber.pyw --verifier
+
+vérifie les imports, la présence de FFmpeg et l'écriture des dossiers de
+travail, affiche un bilan, et sort avec le code 0 si tout va bien.
 """
 
 from __future__ import annotations
@@ -17,15 +24,137 @@ import threading
 import webbrowser
 from pathlib import Path
 
-RACINE = Path(__file__).resolve().parent
-if str(RACINE) not in sys.path:
-    sys.path.insert(0, str(RACINE))
+if not getattr(sys, "frozen", False):
+    RACINE = Path(__file__).resolve().parent
+    if str(RACINE) not in sys.path:
+        sys.path.insert(0, str(RACINE))
 
 from app import VERSION, NOM_APPLICATION, chemins, journal  # noqa: E402
 
 journal.demarrer()
 journal.purger()
 journal.silence_bibliotheques()
+
+
+# ---------------------------------------------------------------------------
+# Mode « --verifier » : bilan en ligne de commande, sans ouvrir de fenêtre
+# ---------------------------------------------------------------------------
+
+def verification() -> int:
+    """
+    Contrôle que l'installation est complète et utilisable.
+
+    Sert à valider une version installée sans aucune interaction : imports,
+    binaire FFmpeg, interface web présente, et écriture réelle dans les dossiers
+    de travail. Renvoie 0 si tout est en ordre, 1 sinon.
+    """
+    lignes: list[str] = []
+    tout_va_bien = True
+
+    def resultat(reussi: bool, etiquette: str, detail: str = "") -> None:
+        nonlocal tout_va_bien
+        if not reussi:
+            tout_va_bien = False
+        marque = "OK   " if reussi else "ECHEC"
+        lignes.append(f"  {marque}  {etiquette}" + (f" : {detail}" if detail else ""))
+
+    lignes.append(f"{NOM_APPLICATION} v{VERSION}")
+    lignes.append(f"  Mode          : {'version installée' if chemins.EST_GELE else 'sources'}")
+    lignes.append(f"  Ressources    : {chemins.DOSSIER_RESSOURCES}")
+    lignes.append(f"  Données       : {chemins.RACINE}")
+    lignes.append(f"  Modèles       : {chemins.DOSSIER_MODELES}")
+    lignes.append("")
+
+    for module, etiquette in (
+        ("webview", "interface de fenêtre (pywebview)"),
+        ("faster_whisper", "moteur de transcription (faster-whisper)"),
+        ("ctranslate2", "calcul (CTranslate2)"),
+        ("numpy", "calcul numérique (numpy)"),
+        ("tokenizers", "tokeniseur (tokenizers)"),
+        ("huggingface_hub", "téléchargement des modèles (huggingface_hub)"),
+        ("psutil", "détection du matériel (psutil)"),
+    ):
+        try:
+            __import__(module)
+            resultat(True, etiquette)
+        except Exception as exc:
+            resultat(False, etiquette, f"{type(exc).__name__}: {exc}")
+
+    # Interface web : sans elle la fenêtre s'ouvrirait vide.
+    page = chemins.DOSSIER_WEB / "index.html"
+    resultat(page.is_file(), "interface web (web/index.html)", "" if page.is_file() else str(page))
+
+    # FFmpeg : présence du binaire, puis exécution réelle.
+    try:
+        from app import audio as audio_verif
+
+        binaire = audio_verif.binaire_ffmpeg()
+        sortie = subprocess.run(
+            [binaire, "-version"], capture_output=True, text=True, errors="replace",
+            timeout=30, creationflags=(subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0),
+        )
+        premiere = (sortie.stdout or "").splitlines()[0] if sortie.stdout else ""
+        resultat(sortie.returncode == 0, "décodeur audio (FFmpeg)", premiere or binaire)
+    except Exception as exc:
+        resultat(False, "décodeur audio (FFmpeg)", f"{type(exc).__name__}: {exc}")
+
+    # Écriture des dossiers de travail : c'est le point qui casse quand une
+    # version installée essaie encore d'écrire dans son dossier de programme.
+    try:
+        chemins.assurer_dossiers()
+        temoin = chemins.DOSSIER_LOGS / "verification.tmp"
+        temoin.write_text("ok", encoding="utf-8")
+        temoin.unlink(missing_ok=True)
+        resultat(True, "écriture des journaux", str(chemins.DOSSIER_LOGS))
+    except Exception as exc:
+        resultat(False, "écriture des journaux", f"{type(exc).__name__}: {exc}")
+
+    message = chemins.dossier_modeles_inscriptible(chemins.DOSSIER_MODELES)
+    resultat(not message, "écriture du dossier des modèles", message or str(chemins.DOSSIER_MODELES))
+
+    try:
+        config_verif = __import__("app.config", fromlist=["charger"])
+        config_verif.charger()
+        config_verif.sauver(config_verif.charger())
+        resultat(True, "lecture et écriture de la configuration", str(chemins.FICHIER_CONFIG))
+    except Exception as exc:
+        resultat(False, "configuration", f"{type(exc).__name__}: {exc}")
+
+    # Détection matérielle et presets : ce sont les premiers appels de l'interface.
+    try:
+        from app import materiel as materiel_verif
+        from app import presets as presets_verif
+
+        mat = materiel_verif.detecter()
+        presets_verif.recommandation(mat)
+        resultat(True, "détection du matériel", f"{mat.fils_calcul} fils, {mat.ram_go:.0f} Go")
+    except Exception as exc:
+        resultat(False, "détection du matériel", f"{type(exc).__name__}: {exc}")
+
+    lignes.append("")
+    lignes.append("  Bilan : tout est en place." if tout_va_bien
+                  else "  Bilan : installation incomplète, voir les lignes ECHEC.")
+    lignes.append("")
+
+    texte = "\n".join(lignes)
+    try:
+        print(texte)
+    except Exception:
+        pass
+    journal.info("Vérification :\n%s", texte)
+    # Toujours un double du bilan sur disque : sous pythonw.exe, il n'y a pas de console.
+    try:
+        (chemins.DOSSIER_LOGS / "verification.txt").write_text(texte + "\n", encoding="utf-8")
+    except OSError:
+        pass
+    return 0 if tout_va_bien else 1
+
+
+# L'exécutable « whiscribe-verifier.exe » produit par PyInstaller n'a pas d'autre
+# raison d'être : il déclenche la vérification même sans argument.
+_NOM_EXECUTABLE = Path(sys.argv[0] if sys.argv else "").stem.lower()
+if "--verifier" in sys.argv or _NOM_EXECUTABLE.endswith("verifier"):
+    sys.exit(verification())
 
 
 # ---------------------------------------------------------------------------
@@ -67,9 +196,14 @@ if _manquants:
         NOM_APPLICATION,
         "Il manque des composants pour démarrer :\n\n  "
         + "\n  ".join(_manquants)
-        + "\n\nLancez « installer.bat » à côté de l'application, il pose tout "
-          "automatiquement. Installation manuelle :\n\n  pip install "
-        + " ".join(_manquants),
+        + (
+            "\n\nL'installation est incomplète ou abîmée. Réinstallez "
+            "l'application depuis son programme d'installation."
+            if chemins.EST_GELE else
+            "\n\nLancez « installer.bat » à côté de l'application, il pose tout "
+            "automatiquement. Installation manuelle :\n\n  pip install "
+            + " ".join(_manquants)
+        ),
     )
 
 import webview  # noqa: E402
@@ -90,7 +224,7 @@ class Passerelle:
     """Objet exposé à l'interface web sous le nom `pywebview.api`."""
 
     def __init__(self):
-        self.fenetre = None
+        self._fenetre = None
         self.config = config_module.charger()
         self.materiel = materiel.detecter()
         self.file = traitement.FileTraitement(self.materiel)
@@ -106,8 +240,8 @@ class Passerelle:
 
     def _js(self, appel: str) -> None:
         try:
-            if self.fenetre is not None:
-                self.fenetre.evaluate_js(appel)
+            if self._fenetre is not None:
+                self._fenetre.evaluate_js(appel)
         except Exception as exc:
             journal.debug("Appel JavaScript ignoré : %s", exc)
 
@@ -178,12 +312,131 @@ class Passerelle:
             },
             "ffmpeg": audio_module.ffmpeg_present(),
             "journal": journal.nom_fichier(),
-            "avertissements": presets.avertissements(
-                self.config.get("preset", "qualite"), self.materiel,
-                bool(self.config.get("diarisation")),
-                self.config.get("modele_avance", "") if self.config.get("mode_avance") else "",
-            ),
+            "modeles": self.infos_modeles(),
+            "version_installee": chemins.EST_GELE,
+            "avertissements": self._avertissements(),
         }
+
+    def _avertissements(self) -> list[str]:
+        """Garde-fous matériels, plus l'annonce du téléchargement à venir."""
+        messages = presets.avertissements(
+            self.config.get("preset", "qualite"), self.materiel,
+            bool(self.config.get("diarisation")),
+            self.config.get("modele_avance", "") if self.config.get("mode_avance") else "",
+        )
+        annonce = self._annonce_telechargement()
+        if annonce:
+            messages.insert(0, annonce)
+        return messages
+
+    def _modele_courant(self) -> str:
+        avance = self.config.get("modele_avance", "") if self.config.get("mode_avance") else ""
+        return presets.modele_du_preset(self.config.get("preset", "qualite"), avance)
+
+    def _annonce_telechargement(self) -> str:
+        """
+        Phrase affichée quand le modèle choisi n'est pas encore sur la machine.
+
+        C'est le seul moment où l'application a besoin d'Internet : il faut le
+        dire avant, avec la taille, et pas au milieu d'une transcription.
+        """
+        from app import moteur
+
+        modele = self._modele_courant()
+        try:
+            if moteur.modele_deja_telecharge(modele):
+                return ""
+        except Exception:
+            return ""
+        taille = moteur.taille_annoncee(modele)
+        return (
+            f"Le modèle « {moteur.nom_court(modele)} » n'est pas encore sur cette machine. "
+            f"Il sera téléchargé une seule fois au lancement de la première transcription, "
+            f"environ {taille}, dans « {chemins.DOSSIER_MODELES} ». Une connexion Internet "
+            "est nécessaire pour cette étape, et pour elle seulement : ensuite l'application "
+            "fonctionne entièrement hors ligne."
+        )
+
+    # -- dossier des modèles ------------------------------------------------
+
+    def infos_modeles(self) -> dict:
+        """État du dossier des modèles, pour le panneau des réglages."""
+        dossier = chemins.DOSSIER_MODELES
+        from app import moteur
+
+        etat_presets = []
+        for p in presets.PRESETS.values():
+            try:
+                present = moteur.modele_deja_telecharge(p["modele"])
+            except Exception:
+                present = False
+            etat_presets.append({
+                "cle": p["cle"],
+                "nom": p["nom"],
+                "modele": moteur.nom_court(p["modele"]),
+                "taille": f"{p['telechargement_go']:.1f} Go".replace(".", ","),
+                "present": present,
+            })
+
+        return {
+            "dossier": str(dossier),
+            "defaut": str(chemins.dossier_modeles_defaut()),
+            "personnalise": chemins.FICHIER_CHOIX_MODELES.exists(),
+            "occupe": presets.nombre_fr(chemins.taille_dossier_go(dossier)) + " Go",
+            "libre": presets.nombre_fr(chemins.espace_libre_go(dossier)) + " Go",
+            "presets": etat_presets,
+        }
+
+    def choisir_dossier_modeles(self) -> None:
+        self._fond(self._dialogue_dossier_modeles)
+
+    def _dialogue_dossier_modeles(self) -> None:
+        try:
+            resultat = self._fenetre.create_file_dialog(
+                webview.FOLDER_DIALOG, directory=str(chemins.DOSSIER_MODELES),
+            )
+        except Exception as exc:
+            journal.exception("Ouverture du sélecteur de dossier impossible", exc)
+            return
+        if not resultat:
+            return
+        chemin = resultat[0] if isinstance(resultat, (list, tuple)) else resultat
+        self._js(f"onDossierModeles({_json(self.definir_dossier_modeles(str(chemin)))})")
+
+    def definir_dossier_modeles(self, chemin: str) -> dict:
+        """
+        Change l'emplacement des modèles. Les modèles déjà téléchargés ne sont
+        pas déplacés : ils seront simplement retéléchargés au besoin, et l'ancien
+        dossier reste sur le disque, à l'utilisateur de le vider s'il le souhaite.
+        """
+        texte = (chemin or "").strip()
+        ancien = str(chemins.DOSSIER_MODELES)
+
+        if texte:
+            probleme = chemins.dossier_modeles_inscriptible(texte)
+            if probleme:
+                return {"ok": False, "message": probleme, "modeles": self.infos_modeles()}
+
+        nouveau = chemins.definir_dossier_modeles(texte, memoriser=True)
+        chemins.assurer_dossiers()
+        journal.info("Dossier des modèles : %s (était %s)", nouveau, ancien)
+
+        message = f"Les modèles seront rangés dans « {nouveau} »."
+        if str(nouveau) != ancien and chemins.taille_dossier_go(ancien) > 0.05:
+            message += (
+                f" L'ancien dossier « {ancien} » n'a pas été touché, vous pouvez le "
+                "supprimer si vous n'en avez plus besoin."
+            )
+        return {
+            "ok": True,
+            "message": message,
+            "modeles": self.infos_modeles(),
+            "avertissements": self._avertissements(),
+        }
+
+    def ouvrir_dossier_modeles(self) -> None:
+        chemins.assurer_dossiers()
+        self.ouvrir(str(chemins.DOSSIER_MODELES))
 
     # -- réglages ----------------------------------------------------------
 
@@ -198,11 +451,7 @@ class Passerelle:
         config_module.sauver(self.config)
         return {
             "config": self.config,
-            "avertissements": presets.avertissements(
-                self.config.get("preset", "qualite"), self.materiel,
-                bool(self.config.get("diarisation")),
-                self.config.get("modele_avance", "") if self.config.get("mode_avance") else "",
-            ),
+            "avertissements": self._avertissements(),
         }
 
     def sauver_glossaire(self, contenu: str) -> dict:
@@ -247,7 +496,7 @@ class Passerelle:
     def _dialogue_fichiers(self) -> None:
         extensions = " ".join(f"*{e}" for e in sorted(audio_module.EXTENSIONS_AUDIO))
         try:
-            resultat = self.fenetre.create_file_dialog(
+            resultat = self._fenetre.create_file_dialog(
                 webview.OPEN_DIALOG, allow_multiple=True,
                 file_types=(f"Fichiers audio et vidéo ({extensions})", "Tous les fichiers (*.*)"),
             )
@@ -284,7 +533,7 @@ class Passerelle:
 
     def _dialogue_dossier(self) -> None:
         try:
-            resultat = self.fenetre.create_file_dialog(
+            resultat = self._fenetre.create_file_dialog(
                 webview.FOLDER_DIALOG,
                 directory=self.config.get("dossier_sortie", "") or str(Path.home()),
             )
@@ -306,7 +555,12 @@ class Passerelle:
         if not audio_module.ffmpeg_present():
             return {
                 "ok": False,
-                "message": "FFmpeg est introuvable. Relancez « installer.bat » pour le poser.",
+                "message": (
+                    "Le décodeur audio FFmpeg est introuvable. "
+                    + ("Réinstallez l'application depuis son programme d'installation."
+                       if chemins.EST_GELE
+                       else "Relancez « installer.bat » pour le poser.")
+                ),
             }
         dossier = Path(self.config.get("dossier_sortie") or "")
         try:
@@ -316,6 +570,10 @@ class Passerelle:
                 "ok": False,
                 "message": f"Le dossier de sortie n'est pas accessible en écriture ({exc.strerror}).",
             }
+
+        refus = self._verifier_modele_disponible()
+        if refus:
+            return refus
 
         if self.config.get("diarisation"):
             manque = diarisation.indisponibilite()
@@ -332,6 +590,73 @@ class Passerelle:
             return {"ok": False, "message": "Aucun fichier en attente dans la file."}
         self._sur_journal("info", "Démarrage de la file.")
         return {"ok": True}
+
+    def _verifier_modele_disponible(self) -> dict | None:
+        """
+        Contrôles préalables au premier téléchargement d'un modèle.
+
+        Renvoie un refus expliqué si le modèle manque et que rien ne permet de
+        l'obtenir (pas de réseau, pas de place), sinon None. Quand le modèle
+        manque mais que tout est réuni, on se contente d'annoncer la taille.
+        """
+        from app import moteur
+
+        modele = self._modele_courant()
+        try:
+            if moteur.modele_deja_telecharge(modele):
+                return None
+        except Exception:
+            return None
+
+        taille = moteur.taille_annoncee(modele)
+        dossier = chemins.DOSSIER_MODELES
+
+        probleme = chemins.dossier_modeles_inscriptible(dossier)
+        if probleme:
+            return {
+                "ok": False,
+                "message": (
+                    f"Le modèle doit être téléchargé, mais le dossier prévu « {dossier} » "
+                    f"n'est pas utilisable. {probleme} Choisissez un autre emplacement dans "
+                    "les réglages, section « Modèles »."
+                ),
+            }
+
+        libre = chemins.espace_libre_go(dossier)
+        requis = 0.0
+        for p in presets.PRESETS.values():
+            if p["modele"] == modele:
+                requis = p["telechargement_go"] * 1.3
+        if libre and requis and libre < requis:
+            return {
+                "ok": False,
+                "message": (
+                    f"Il faut environ {taille} pour télécharger ce modèle, et il ne reste "
+                    f"que {presets.nombre_fr(libre)} Go sur le disque de « {dossier} ». "
+                    "Libérez de la place, ou rangez les modèles sur un autre disque dans "
+                    "les réglages, section « Modèles »."
+                ),
+            }
+
+        if not moteur.connexion_disponible():
+            return {
+                "ok": False,
+                "message": (
+                    f"Ce modèle n'est pas encore sur la machine, il pèse environ {taille} et "
+                    "doit être téléchargé une première fois. Or aucune connexion Internet "
+                    "n'a été trouvée. Connectez le poste le temps de ce téléchargement, "
+                    "ensuite l'application fonctionnera définitivement hors ligne. "
+                    "Si un modèle plus léger vous suffit, le preset « Rapide » demande "
+                    "1,6 Go au lieu de 3,1 Go."
+                ),
+            }
+
+        self._sur_journal(
+            "attention",
+            f"Premier usage de ce modèle : téléchargement d'environ {taille} vers "
+            f"« {dossier} ». Cela n'arrive qu'une fois, ensuite tout reste sur la machine.",
+        )
+        return None
 
     def arreter(self) -> None:
         self.file.arreter()
@@ -473,7 +798,7 @@ def principal() -> None:
         background_color="#12151b",
         text_select=True,
     )
-    passerelle.fenetre = fenetre
+    passerelle._fenetre = fenetre
     fenetre.events.loaded += lambda: _au_demarrage(passerelle, fenetre)
 
     try:

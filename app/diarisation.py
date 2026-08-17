@@ -19,6 +19,7 @@ from typing import Callable
 
 import numpy as np
 
+from . import URL_PROJET as _URL_DEPOT
 from . import chemins, journal
 from .journal import ErreurLisible
 
@@ -31,6 +32,13 @@ DEPOTS = (
 
 URL_CONDITIONS = "https://huggingface.co/pyannote/speaker-diarization-3.1"
 URL_JETON = "https://huggingface.co/settings/tokens"
+
+# Le dépôt du projet, cité quand la fonction n'est pas incluse dans la version
+# installée. L'ancre pointe sur la section du README qui décrit la voie source.
+URL_PROJET = (
+    f"{_URL_DEPOT}#installation-depuis-les-sources-"
+    "développeurs-et-séparation-des-locuteurs"
+)
 
 
 def torch_present() -> bool:
@@ -57,18 +65,31 @@ def disponible() -> bool:
 
 def indisponibilite() -> str:
     """Phrase expliquant pourquoi la diarisation ne peut pas tourner, ou chaîne vide."""
+    if disponible():
+        return ""
+
+    if chemins.EST_GELE:
+        # La version installée ne contient pas PyTorch : il pèse à lui seul plus
+        # de 2,5 Go, ce qui ferait passer le programme d'installation de 200 Mo à
+        # près de 3 Go pour une fonction facultative.
+        return (
+            "La séparation des locuteurs n'est pas incluse dans la version installée. "
+            "Elle repose sur PyTorch, environ 2,5 Go de composants supplémentaires. "
+            "Elle reste disponible dans la version source du projet, voir la section "
+            "« Séparation des locuteurs » du fichier README. Tout le reste de "
+            "l'application fonctionne normalement."
+        )
+
     if not torch_present():
         return (
             "PyTorch n'est pas installé. Relancez « installer.bat » et répondez oui à "
             "la question sur la séparation des locuteurs, ou lancez "
             "« installer.bat --locuteurs »."
         )
-    if not pyannote_present():
-        return (
-            "La bibliothèque pyannote.audio n'est pas installée. Relancez "
-            "« installer.bat --locuteurs »."
-        )
-    return ""
+    return (
+        "La bibliothèque pyannote.audio n'est pas installée. Relancez "
+        "« installer.bat --locuteurs »."
+    )
 
 
 def jeton() -> str:
@@ -245,11 +266,14 @@ def guide() -> dict:
     return {
         "url_conditions": URL_CONDITIONS,
         "url_jeton": URL_JETON,
+        "url_projet": URL_PROJET,
+        "version_installee": chemins.EST_GELE,
+        "fichier_jeton": str(chemins.FICHIER_JETON_HF),
         "etapes": [
             "Créez un compte gratuit sur huggingface.co, puis ouvrez la page du modèle "
             "pyannote/speaker-diarization-3.1 et acceptez ses conditions d'utilisation.",
             "Dans les réglages du compte, créez un jeton d'accès de type « Read ».",
-            "Collez le jeton dans le champ ci-dessous. Il est enregistré dans "
-            "jeton_hf.txt, à côté de l'application, et n'est jamais versionné.",
+            "Collez le jeton dans le champ ci-dessous. Il est enregistré dans le "
+            "fichier « jeton_hf.txt » de vos données personnelles, et n'est jamais versionné.",
         ],
     }

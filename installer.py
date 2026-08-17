@@ -1,5 +1,5 @@
 """
-Installateur du WhisperScribe.
+Installateur de WhiScribe (installation depuis les sources).
 
 Relançable autant de fois qu'on veut : il ne réinstalle que ce qui manque et
 finit toujours par un bilan clair de l'état du poste.
@@ -319,7 +319,7 @@ def principal() -> int:
     analyseur.add_argument("--verifier", action="store_true")
     arguments, _ = analyseur.parse_known_args()
 
-    titre("WhisperScribe — installation")
+    titre("WhiScribe — installation")
     print("  Transcription audio, 100 % sur votre machine.")
     print("  Rien de ce que vous transcrivez ne quitte ce poste.")
 

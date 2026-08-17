@@ -1,5 +1,5 @@
 /* =========================================================================
-   WhisperScribe — logique d'interface
+   WhiScribe — logique d'interface
 
    Le Python appelle les fonctions globales onXxx() définies plus bas.
    L'interface appelle Python via pywebview.api.*
@@ -13,6 +13,8 @@ const etat = {
   fichiers: new Map(),   // identifiant -> données de la ligne
   historique: [],
   diarisation: { disponible: false, jeton_present: false, guide: {} },
+  modeles: { dossier: '', presets: [] },
+  versionInstallee: false,
   enCours: false,
   apercuChemin: null,
   pret: false,
@@ -51,6 +53,8 @@ function initialiser(d) {
   etat.config = d.config || {};
   etat.presets = d.presets || [];
   etat.diarisation = d.diarisation || etat.diarisation;
+  etat.modeles = d.modeles || etat.modeles;
+  etat.versionInstallee = !!d.version_installee;
 
   $('#version').textContent = 'v' + d.version;
   appliquerTheme(etat.config.theme || 'auto');
@@ -63,6 +67,7 @@ function initialiser(d) {
   majGlossaire(d.glossaire ? d.glossaire.resume : null);
   majCorrections(d.corrections || {});
   majDiarisation();
+  majModeles();
   afficherAvertissements(d.avertissements || []);
 
   if (!d.ffmpeg) {
@@ -236,10 +241,14 @@ function majDiarisation() {
   const bascule = $('#opt-diarisation');
 
   if (!d.disponible) {
-    el.textContent = 'Composants non installés';
+    // Dans la version installée, PyTorch n'est pas embarqué : on l'explique
+    // plutôt que de laisser croire à une installation ratée.
+    el.textContent = etat.versionInstallee
+      ? 'Non incluse dans la version installée'
+      : 'Composants non installés';
     bascule.checked = false;
     bascule.disabled = true;
-    $('#libelle-jeton').textContent = 'Voir la procédure';
+    $('#libelle-jeton').textContent = 'En savoir plus';
   } else if (!d.jeton_present) {
     el.textContent = 'Jeton Hugging Face à renseigner';
     bascule.disabled = false;
@@ -251,6 +260,45 @@ function majDiarisation() {
   }
   $('#bloc-locuteurs').style.display = bascule.checked ? 'block' : 'none';
 }
+
+/* ------------------------------------------------------ Dossier des modèles */
+
+function majModeles() {
+  const m = etat.modeles || {};
+  const liste = m.presets || [];
+  const absents = liste.filter((p) => !p.present);
+
+  $('#etat-modeles').textContent = liste.length
+    ? (absents.length === 0
+        ? 'Tous les modèles sont téléchargés, ' + m.occupe + ' occupés'
+        : (liste.length - absents.length) + ' modèle(s) sur ' + liste.length
+          + ' téléchargé(s), ' + m.occupe + ' occupés')
+    : m.occupe + ' occupés';
+
+  const chemin = $('#chemin-modeles');
+  chemin.textContent = m.dossier || '--';
+  chemin.title = m.dossier || '';
+
+  const tailles = liste.map((p) => p.nom + ' ' + p.taille).join(', ');
+  $('#aide-modeles').textContent =
+    'Les modèles se téléchargent une seule fois, au premier usage'
+    + (tailles ? ' (' + tailles + ')' : '')
+    + '. Espace libre sur ce disque : ' + (m.libre || '--') + '.';
+}
+
+function onDossierModeles(retour) {
+  if (!retour) return;
+  if (retour.modeles) etat.modeles = retour.modeles;
+  majModeles();
+  $('#retour-modeles').innerHTML = retour.ok
+    ? encartSucces(retour.message) : encartAttention(retour.message);
+  if (retour.ok) {
+    journaliser('ok', retour.message);
+    if (retour.avertissements) afficherAvertissements(retour.avertissements);
+    setTimeout(() => { $('#retour-modeles').innerHTML = ''; }, 8000);
+  }
+}
+window.onDossierModeles = onDossierModeles;
 
 async function rafraichirEstimations() {
   for (const [id, item] of etat.fichiers) {
@@ -651,6 +699,14 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#nb-locuteurs').addEventListener('change', (e) =>
     enregistrer({ nb_locuteurs: parseInt(e.target.value, 10) || 0 }));
 
+  // Dossier des modèles
+  $('#btn-dossier-modeles').addEventListener('click', () => {
+    $('#retour-modeles').innerHTML = '';
+    pywebview.api.choisir_dossier_modeles();
+  });
+  $('#btn-ouvrir-modeles').addEventListener('click', () =>
+    pywebview.api.ouvrir_dossier_modeles());
+
   $('#opt-avance').addEventListener('change', (e) => {
     $('#bloc-avance').style.display = e.target.checked ? 'block' : 'none';
     enregistrer({ mode_avance: e.target.checked });
@@ -706,11 +762,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const d = etat.diarisation;
     $('#etat-diarisation-modale').innerHTML = d.disponible ? '' :
       encartAttention(d.indisponibilite);
+
+    // Version installée sans PyTorch : le jeton ne servirait à rien, on masque
+    // toute la procédure et on renvoie vers la version source.
+    const inutile = !d.disponible && etat.versionInstallee;
+    $('#bloc-procedure-jeton').style.display = inutile ? 'none' : 'block';
+    $('#bloc-source-locuteurs').style.display = inutile ? 'block' : 'none';
+    $('#btn-effacer-jeton').style.display = inutile ? 'none' : '';
+    $('#btn-enregistrer-jeton').style.display = inutile ? 'none' : '';
+
     $('#etapes-jeton').innerHTML = (d.guide.etapes || []).map((e) => `<li>${ech(e)}</li>`).join('');
     $('#retour-jeton').innerHTML = '';
     $('#champ-jeton').value = '';
     ouvrirModale('#modale-jeton');
   });
+  $('#btn-lien-projet').addEventListener('click', () =>
+    pywebview.api.ouvrir_lien(etat.diarisation.guide.url_projet));
   $('#btn-lien-conditions').addEventListener('click', () =>
     pywebview.api.ouvrir_lien(etat.diarisation.guide.url_conditions));
   $('#btn-lien-jeton').addEventListener('click', () =>

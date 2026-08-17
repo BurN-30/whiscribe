@@ -92,7 +92,7 @@ class MoteurTranscription:
         chemins.assurer_dossiers()
 
         if signaler and not modele_deja_telecharge(modele):
-            taille = _taille_annoncee(modele)
+            taille = taille_annoncee(modele)
             signaler(
                 "attention",
                 f"Premier usage de ce modèle : téléchargement d'environ {taille}. "
@@ -222,7 +222,25 @@ def nom_court(modele: str) -> str:
 _nom_court = nom_court  # compatibilité interne
 
 
-def _taille_annoncee(modele: str) -> str:
+def connexion_disponible(delai: float = 4.0) -> bool:
+    """
+    Teste si le dépôt de modèles est joignable, avant de lancer un téléchargement.
+
+    Une simple ouverture de socket : pas de requête, rien d'envoyé. Cela évite de
+    présenter un traceback réseau à quelqu'un dont le poste est simplement isolé.
+    """
+    import socket
+
+    for hote in ("huggingface.co", "cdn-lfs.huggingface.co"):
+        try:
+            with socket.create_connection((hote, 443), timeout=delai):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def taille_annoncee(modele: str) -> str:
     for entree in presets.MODELES_AVANCES:
         if entree["cle"] == modele:
             return entree["taille"]

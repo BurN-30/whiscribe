@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WhisperScribe</title>
+<title>WhiScribe</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -36,7 +36,7 @@
 <header class="entete">
   <div class="marque">
     <svg class="icone-l icone"><use href="#i-onde"></use></svg>
-    <h1>WhisperScribe</h1>
+    <h1>WhiScribe</h1>
     <span class="version" id="version"></span>
   </div>
   <span class="confidentialite" title="Aucune donnée ne quitte cette machine">
@@ -213,6 +213,22 @@
     </div>
 
     <div class="bloc-reglage">
+      <span class="titre-section">Modèles</span>
+      <div class="sous-libelle" id="etat-modeles">--</div>
+      <div class="chemin-modeles" id="chemin-modeles" title="">--</div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="bouton" id="btn-dossier-modeles" style="flex:1">
+          <svg class="icone-s icone"><use href="#i-dossier"></use></svg> Changer
+        </button>
+        <button class="bouton" id="btn-ouvrir-modeles" title="Ouvrir le dossier">
+          <svg class="icone-s icone"><use href="#i-externe"></use></svg>
+        </button>
+      </div>
+      <span class="aide" id="aide-modeles"></span>
+      <div id="retour-modeles"></div>
+    </div>
+
+    <div class="bloc-reglage">
       <label class="bascule">
         <input type="checkbox" id="opt-avance">
         <span class="piste"></span>
@@ -354,32 +370,58 @@
     </div>
     <div class="modale-corps">
       <div id="etat-diarisation-modale"></div>
-      <p>
-        Le modèle qui reconnaît les voix est mis à disposition gratuitement, mais
-        son auteur demande d'accepter ses conditions et de s'identifier par un
-        jeton. Trois étapes, une seule fois.
-      </p>
-      <ol id="etapes-jeton"></ol>
-      <div style="display:flex;gap:8px;margin-bottom:14px">
-        <button class="bouton" id="btn-lien-conditions">
-          <svg class="icone-s icone"><use href="#i-externe"></use></svg> Page du modèle
-        </button>
-        <button class="bouton" id="btn-lien-jeton">
-          <svg class="icone-s icone"><use href="#i-externe"></use></svg> Créer un jeton
-        </button>
+
+      <div id="bloc-source-locuteurs" style="display:none">
+        <p>
+          Cette fonction repose sur PyTorch, environ 2,5 Go de composants
+          supplémentaires. Les embarquer ferait passer le programme d'installation
+          de quelques centaines de mégaoctets à près de trois gigaoctets, pour une
+          option que tout le monde n'utilise pas.
+        </p>
+        <p>
+          Elle reste disponible dans la version source du projet : l'installateur
+          pose PyTorch et pyannote sur demande. La marche à suivre est décrite dans
+          le fichier README, section « Séparation des locuteurs ».
+        </p>
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <button class="bouton" id="btn-lien-projet">
+            <svg class="icone-s icone"><use href="#i-externe"></use></svg> Voir la procédure
+          </button>
+        </div>
+        <div class="encart encart-info">
+          <svg class="icone-s icone"><use href="#i-info"></use></svg>
+          <span>Tout le reste de l'application fonctionne normalement, simplement sans étiquettes de locuteur.</span>
+        </div>
       </div>
-      <div class="champ">
-        <label for="champ-jeton">Jeton d'accès</label>
-        <input type="password" id="champ-jeton" placeholder="hf_..." spellcheck="false">
-        <span class="aide">
-          Enregistré dans <code>jeton_hf.txt</code>, à côté de l'application.
-          Ce fichier n'est jamais versionné.
-        </span>
-      </div>
-      <div id="retour-jeton"></div>
-      <div class="encart encart-info" style="margin-top:12px">
-        <svg class="icone-s icone"><use href="#i-info"></use></svg>
-        <span>Sans jeton, la transcription fonctionne normalement, simplement sans étiquettes de locuteur.</span>
+
+      <div id="bloc-procedure-jeton">
+        <p>
+          Le modèle qui reconnaît les voix est mis à disposition gratuitement, mais
+          son auteur demande d'accepter ses conditions et de s'identifier par un
+          jeton. Trois étapes, une seule fois.
+        </p>
+        <ol id="etapes-jeton"></ol>
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <button class="bouton" id="btn-lien-conditions">
+            <svg class="icone-s icone"><use href="#i-externe"></use></svg> Page du modèle
+          </button>
+          <button class="bouton" id="btn-lien-jeton">
+            <svg class="icone-s icone"><use href="#i-externe"></use></svg> Créer un jeton
+          </button>
+        </div>
+        <div class="champ">
+          <label for="champ-jeton">Jeton d'accès</label>
+          <input type="password" id="champ-jeton" placeholder="hf_..." spellcheck="false">
+          <span class="aide">
+            Enregistré dans <code>jeton_hf.txt</code>, avec vos données personnelles.
+            Ce fichier n'est jamais versionné.
+          </span>
+        </div>
+        <div id="retour-jeton"></div>
+        <div class="encart encart-info" style="margin-top:12px">
+          <svg class="icone-s icone"><use href="#i-info"></use></svg>
+          <span>Sans jeton, la transcription fonctionne normalement, simplement sans étiquettes de locuteur.</span>
+        </div>
       </div>
     </div>
     <div class="modale-pied">
@@ -465,7 +507,7 @@
       </p>
     </div>
     <div class="modale-pied">
-      <button class="bouton bouton-discret" id="btn-ouvrir-app">Ouvrir le dossier de l'application</button>
+      <button class="bouton bouton-discret" id="btn-ouvrir-app">Ouvrir le dossier de mes données</button>
       <span class="pousse"></span>
       <button class="bouton bouton-accent" data-fermer>Fermer</button>
     </div>

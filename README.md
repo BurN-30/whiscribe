@@ -1,8 +1,34 @@
-# WhisperScribe
+# WhiScribe
 
 Application de bureau pour transcrire des enregistrements audio en texte, **entièrement sur votre machine**. Pensée pour les réunions : audio de salle, plusieurs voix, noms propres et jargon maison.
 
 Windows, interface en français, installation automatisée.
+
+---
+
+## Installation
+
+### La voie recommandée : le programme d'installation
+
+1. Téléchargez **`WhiScribe-Setup-X.Y.Z.exe`** depuis l'onglet [Releases](../../releases).
+2. Double-cliquez dessus, l'assistant est en français.
+3. Lancez **WhiScribe** depuis le menu Démarrer.
+
+**Aucun prérequis**, rien d'autre à installer : tout ce dont l'application a besoin est dans ce fichier. L'installation se fait **par utilisateur, sans droits administrateur**, dans `%LOCALAPPDATA%\Programs\WhiScribe`. Vos réglages, votre glossaire et vos journaux vivent dans `%LOCALAPPDATA%\WhiScribe`, jamais dans le dossier du programme.
+
+L'assistant vous demande **où ranger les modèles de transcription**, de 1,6 à 3,1 Go selon le preset. Le défaut convient à la plupart des postes, et un disque à l'étroit se règle en désignant un autre emplacement. Ce choix reste modifiable ensuite, dans les réglages de l'application, section « Modèles ».
+
+Réinstaller une version plus récente par-dessus l'ancienne **ne fait rien perdre** : réglages, glossaire, corrections et modèles sont conservés. La désinstallation, elle, demande explicitement s'il faut supprimer les modèles, puis vos données, en affichant la place réellement occupée. Répondre non aux deux ne retire que le programme.
+
+**Trois limites, dites franchement :**
+
+- Les **modèles ne sont pas dans le programme d'installation**. Ils se téléchargent au premier usage, une seule fois, et l'application annonce la taille avant de commencer. Ensuite elle fonctionne hors connexion, y compris sur un poste isolé.
+- La **séparation des locuteurs n'est pas incluse** : elle repose sur PyTorch, environ 2,5 Go, ce qui multiplierait par dix la taille du téléchargement pour une fonction facultative. Elle reste disponible dans la version source, voir « [Séparation des locuteurs](#séparation-des-locuteurs) ». Dans la version installée, la case le dit clairement au lieu d'échouer.
+- **Windows 64 bits uniquement.** L'affichage s'appuie sur *Microsoft Edge WebView2 Runtime*, présent d'origine sur Windows 11 et sur les Windows 10 à jour. S'il manque, l'assistant le télécharge depuis le site de Microsoft.
+
+### La voie source
+
+Réservée à deux cas : **modifier le code**, ou **obtenir la séparation des locuteurs**. Elle est décrite en fin de fichier, dans « [Installation depuis les sources](#installation-depuis-les-sources-développeurs-et-séparation-des-locuteurs) ».
 
 ---
 
@@ -13,58 +39,6 @@ Windows, interface en français, installation automatisée.
 La seule chose qui transite par Internet est le **téléchargement initial du modèle** (1,6 ou 3,1 Go selon le preset), une fois pour toutes. Ensuite l'application fonctionne hors connexion, y compris sur un poste isolé.
 
 C'est la différence de fond avec les services de transcription en ligne : un compte rendu de réunion, un entretien, une conversation client ne sont pas des données que l'on téléverse sans y penser.
-
----
-
-## Installation
-
-### Automatique, recommandée
-
-1. Installez [Python 3.9 ou plus récent](https://www.python.org/downloads/) en cochant **« Add python.exe to PATH »**.
-2. Double-cliquez sur **`installer.bat`**.
-3. Répondez à la question sur la séparation des locuteurs (voir plus bas), puis laissez faire.
-4. Double-cliquez sur **`lancer.bat`**.
-
-L'installateur est **relançable** : il ne réinstalle que ce qui manque. Il crée un environnement Python isolé dans `.venv`, sans toucher au Python du système.
-
-Il n'a besoin **ni de droits administrateur, ni de winget, ni de Chocolatey**. FFmpeg est posé par un paquet Python qui embarque le binaire, donc rien à ajouter au `PATH`.
-
-| Option | Effet |
-|---|---|
-| `installer.bat` | Installation standard, pose la question sur les locuteurs |
-| `installer.bat --locuteurs` | Ajoute la séparation des locuteurs (PyTorch + pyannote) |
-| `installer.bat --sans-locuteurs` | Installation légère, sans question |
-| `installer.bat --verifier` | N'affiche que le bilan de l'état du poste |
-
-### Manuelle
-
-Pour qui préfère garder la main.
-
-```bat
-python -m venv .venv
-.venv\Scripts\activate
-
-pip install -r requirements.txt
-
-REM Seulement si une carte NVIDIA est présente : évite l'erreur
-REM « cublas64_12.dll introuvable » sans toucher au PATH système.
-pip install nvidia-cublas-cu12 nvidia-cudnn-cu12==9.*
-
-REM Seulement si vous voulez la séparation des locuteurs.
-REM Sans carte NVIDIA :
-pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
-REM Avec carte NVIDIA :
-pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu124
-pip install -r requirements-locuteurs.txt
-
-.venv\Scripts\pythonw transcriber.pyw
-```
-
-Le socle fait environ 250 Mo. La séparation des locuteurs ajoute à peu près 2,5 Go, parce qu'elle tire PyTorch : c'est précisément pourquoi elle est optionnelle.
-
-### Si la fenêtre ne s'ouvre pas
-
-Sous Windows, l'interface s'appuie sur **Microsoft Edge WebView2 Runtime**, présent d'origine sur Windows 11 et sur les Windows 10 à jour. S'il manque, installez-le depuis le site de Microsoft, puis relancez. L'application affiche ce message plutôt qu'une erreur technique.
 
 ---
 
@@ -150,6 +124,8 @@ Les deux fichiers s'éditent directement, ou depuis les panneaux de l'applicatio
 
 ## Séparation des locuteurs
 
+> **Disponible uniquement dans la version source.** Cette fonction repose sur PyTorch, environ 2,5 Go, ce qui n'a pas sa place dans un programme d'installation de quelques centaines de mégaoctets. Dans la version installée, la case l'indique et renvoie ici, au lieu d'échouer. Pour l'obtenir, voir « [Installation depuis les sources](#installation-depuis-les-sources-développeurs-et-séparation-des-locuteurs) ».
+
 Facultative, activée par défaut sur le preset Qualité. Elle produit un texte étiqueté :
 
 ```
@@ -169,7 +145,7 @@ Le modèle qui reconnaît les voix (pyannote) est gratuit mais **sous conditions
 3. Créez un jeton d'accès **Read** dans les réglages du compte.
 4. Collez-le dans le panneau « Locuteurs » de l'application.
 
-Le jeton est enregistré dans `jeton_hf.txt`, à côté de l'application, et **jamais versionné** (il est dans le `.gitignore`). La variable d'environnement `HF_TOKEN` est également reconnue et prioritaire.
+Le jeton est enregistré dans `jeton_hf.txt`, avec vos données, et **jamais versionné** (il est dans le `.gitignore`). La variable d'environnement `HF_TOKEN` est également reconnue et prioritaire.
 
 **Sans jeton, tout fonctionne quand même** : la transcription se termine normalement, simplement sans étiquettes, avec un message clair et aucune erreur.
 
@@ -250,9 +226,10 @@ pyannote est appelé directement, sans passer par whisperX, ce qui donne la main
 Le format d'organisation reste volontairement simple : une application de bureau mono-utilisateur, un paquet `app/` de modules courts, une interface web dans `web/`.
 
 ```
-transcriber.pyw       fenêtre et passerelle vers l'interface
-installer.py          installateur relançable
+transcriber.pyw       fenêtre, passerelle vers l'interface, mode --verifier
+installer.py          installateur relançable, version source
 app/
+  chemins.py          emplacements, selon source ou version installée
   materiel.py         détection processeur, mémoire, GPU, NPU
   presets.py          presets, estimations, garde-fous mémoire
   audio.py            FFmpeg, durée, décodage 16 kHz mono
@@ -264,7 +241,19 @@ app/
   config.py           configuration
   journal.py          journalisation et traduction des incidents
 web/                  interface (HTML, CSS, JavaScript)
+packaging/            recette PyInstaller, script Inno Setup, icône
+.github/workflows/    chaîne de publication
 ```
+
+Où vivent les fichiers, selon la manière dont l'application est lancée :
+
+| | Version installée | Version source |
+|---|---|---|
+| Programme | `%LOCALAPPDATA%\Programs\WhiScribe` | le dépôt cloné |
+| Réglages, journaux, glossaire | `%LOCALAPPDATA%\WhiScribe` | à côté du script |
+| Modèles | choisi à l'installation, modifiable dans les réglages | `modeles/`, modifiable dans les réglages |
+
+La séparation vient d'un besoin concret : un dossier de programme peut être en lecture seule, une application n'a pas à y écrire. `app/chemins.py` détecte le cas et rien d'autre dans le code n'a à s'en préoccuper.
 
 ---
 
@@ -272,11 +261,103 @@ web/                  interface (HTML, CSS, JavaScript)
 
 - **Windows uniquement** en pratique. Le code est portable, mais la détection matérielle et les scripts de lancement visent Windows.
 - **Aucune accélération AMD ou Intel en v1.** Ces machines transcrivent sur processeur. Voir « Ouvertures matérielles prévues ».
-- **La séparation des locuteurs exige un jeton Hugging Face** et environ 2,5 Go de dépendances. Sans elle, tout le reste fonctionne.
-- **Le premier lancement a besoin d'Internet** pour télécharger le modèle. Ensuite, plus jamais.
+- **La séparation des locuteurs n'est pas dans le programme d'installation.** Elle demande la version source, environ 2,5 Go de dépendances et un jeton Hugging Face. Sans elle, tout le reste fonctionne.
+- **Le premier lancement a besoin d'Internet** pour télécharger le modèle, de 1,6 à 3,1 Go selon le preset. L'application l'annonce avant de commencer, et le dit clairement si le poste est hors ligne. Ensuite, plus jamais.
+- **Le programme d'installation n'est pas signé.** SmartScreen peut afficher un avertissement au premier lancement : « Informations complémentaires », puis « Exécuter quand même ». Une signature de code coûte plusieurs centaines d'euros par an, ce qui n'a pas de sens pour un outil personnel et gratuit.
 - **L'audio est décodé entièrement en mémoire** : environ 230 Mo par heure d'enregistrement. Confortable jusqu'à plusieurs heures, mais ce n'est pas du traitement en flux.
 - **Les estimations de durée sont des estimations.** Le temps réel mesuré est affiché après coup.
 - **La diarisation n'est pas infaillible** sur les chevauchements et les voix lointaines.
+
+---
+
+## Installation depuis les sources (développeurs, et séparation des locuteurs)
+
+Cette voie ne s'adresse qu'à deux cas : **modifier le code**, ou **obtenir la séparation des locuteurs**, qui n'est pas dans le programme d'installation. Pour tout usage normal, la section « [Installation](#installation) » en tête de ce fichier suffit.
+
+### Automatique
+
+1. Installez [Python 3.9 ou plus récent](https://www.python.org/downloads/) en cochant **« Add python.exe to PATH »**.
+2. Double-cliquez sur **`installer.bat`**.
+3. Répondez à la question sur la séparation des locuteurs, puis laissez faire.
+4. Double-cliquez sur **`lancer.bat`**.
+
+L'installateur est **relançable** : il ne réinstalle que ce qui manque. Il crée un environnement Python isolé dans `.venv`, sans toucher au Python du système.
+
+Il n'a besoin **ni de droits administrateur, ni de winget, ni de Chocolatey**. FFmpeg est posé par un paquet Python qui embarque le binaire, donc rien à ajouter au `PATH`.
+
+| Option | Effet |
+|---|---|
+| `installer.bat` | Installation standard, pose la question sur les locuteurs |
+| `installer.bat --locuteurs` | Ajoute la séparation des locuteurs (PyTorch + pyannote) |
+| `installer.bat --sans-locuteurs` | Installation légère, sans question |
+| `installer.bat --verifier` | N'affiche que le bilan de l'état du poste |
+
+Lancée depuis les sources, l'application range tout à côté du script : `config.json`, `logs/`, `modeles/`, glossaire et corrections. C'est la seule différence de comportement avec la version installée, qui écrit dans `%LOCALAPPDATA%\WhiScribe`.
+
+### Manuelle
+
+Pour qui préfère garder la main.
+
+```bat
+python -m venv .venv
+.venv\Scripts\activate
+
+pip install -r requirements.txt
+
+REM Seulement si une carte NVIDIA est présente : évite l'erreur
+REM « cublas64_12.dll introuvable » sans toucher au PATH système.
+pip install nvidia-cublas-cu12 nvidia-cudnn-cu12==9.*
+
+REM Seulement si vous voulez la séparation des locuteurs.
+REM Sans carte NVIDIA :
+pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+REM Avec carte NVIDIA :
+pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu124
+pip install -r requirements-locuteurs.txt
+
+.venv\Scripts\pythonw transcriber.pyw
+```
+
+Le socle fait environ 250 Mo. La séparation des locuteurs ajoute à peu près 2,5 Go, parce qu'elle tire PyTorch : c'est précisément pourquoi elle est optionnelle, et pourquoi elle reste hors du programme d'installation.
+
+### Contrôler l'état du poste
+
+```bat
+.venv\Scripts\python transcriber.pyw --verifier
+```
+
+Vérifie les composants, le décodeur FFmpeg, l'écriture des dossiers de travail et la détection matérielle, affiche un bilan, et sort avec le code 0 si tout va bien. C'est exactement ce que la chaîne de publication exécute sur l'exécutable construit.
+
+---
+
+## Fabriquer le programme d'installation
+
+La publication est automatisée : poser un tag `vX.Y.Z` sur le dépôt déclenche `.github/workflows/release.yml`, qui construit, vérifie, fabrique le programme d'installation et crée la Release avec le fichier en pièce jointe. Les notes de version sont la section correspondante de [CHANGELOG.md](CHANGELOG.md). Le même workflow se lance à la main depuis l'onglet Actions, sans tag : il construit et vérifie tout, mais ne publie rien.
+
+Pour reproduire la chaîne sur un poste Windows :
+
+```bat
+pip install -r requirements.txt -r requirements-build.txt
+pyinstaller --noconfirm --clean --distpath dist --workpath build packaging\whiscribe.spec
+dist\WhiScribe\whiscribe-verifier.exe
+iscc /DVersionApp=2.0.0 packaging\setup.iss
+```
+
+| Fichier | Rôle |
+|---|---|
+| `packaging/whiscribe.spec` | Recette PyInstaller, mode `onedir`. Produit `dist\WhiScribe\` |
+| `packaging/setup.iss` | Script Inno Setup. Produit `packaging\sortie\WhiScribe-Setup-X.Y.Z.exe` |
+| `packaging/whiscribe.ico` | Icône de l'application et du programme d'installation |
+| `packaging/generer_icone.py` | Régénère l'icône, sans aucune dépendance |
+| `requirements-build.txt` | Outils de construction. **PyInstaller 6.22 minimum**, les versions antérieures ne savent pas geler numpy 2.5 |
+
+Le numéro de version a **une seule source** : `VERSION` dans `app/__init__.py`. Le workflow refuse de publier si le tag ne lui correspond pas.
+
+---
+
+## Si la fenêtre ne s'ouvre pas
+
+L'interface s'appuie sur **Microsoft Edge WebView2 Runtime**, présent d'origine sur Windows 11 et sur les Windows 10 à jour. Le programme d'installation le pose s'il manque ; en version source, installez-le depuis le site de Microsoft puis relancez. L'application affiche ce message plutôt qu'une erreur technique.
 
 ---
 

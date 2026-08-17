@@ -60,6 +60,8 @@ def charger() -> dict:
     if not config["dossier_sortie"]:
         config["dossier_sortie"] = str(chemins.dossier_sortie_defaut())
 
+    # Le dossier des modèles n'est pas rangé ici : il est partagé avec le
+    # programme d'installation et le désinstallateur, voir `app/chemins.py`.
     return config
 
 

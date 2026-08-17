@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import journal
+from . import chemins, journal
 from .journal import ErreurLisible
 
 EXTENSIONS_AUDIO = {
@@ -40,9 +40,40 @@ FILTRES_SALLE = "highpass=f=100,lowpass=f=8000,loudnorm=I=-18:TP=-2:LRA=11"
 _SANS_FENETRE = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
 
+def _ffmpeg_livre() -> str:
+    """
+    Binaire FFmpeg livré avec la version installée.
+
+    PyInstaller ne copie pas le binaire d'imageio-ffmpeg tout seul : il est ajouté
+    explicitement dans le fichier .spec, sous « imageio_ffmpeg/binaries ». On le
+    cherche là, puis n'importe où dans les ressources en dernier recours.
+    """
+    racine = chemins.DOSSIER_RESSOURCES
+    candidats = [
+        *(racine / "imageio_ffmpeg" / "binaries").glob("ffmpeg*.exe"),
+        *(racine / "imageio_ffmpeg" / "binaries").glob("ffmpeg-*"),
+        *racine.glob("ffmpeg*.exe"),
+    ]
+    for candidat in candidats:
+        if candidat.is_file():
+            return str(candidat)
+    return ""
+
+
 @lru_cache(maxsize=1)
 def binaire_ffmpeg() -> str:
     """Chemin du binaire FFmpeg utilisable, ou lève une erreur lisible."""
+    if chemins.EST_GELE:
+        livre = _ffmpeg_livre()
+        if livre:
+            # imageio-ffmpeg respecte cette variable : les appels indirects
+            # trouveront le même binaire que nous.
+            import os
+
+            os.environ.setdefault("IMAGEIO_FFMPEG_EXE", livre)
+            journal.info("FFmpeg livré avec l'application : %s", livre)
+            return livre
+
     try:
         import imageio_ffmpeg  # type: ignore
 
@@ -62,8 +93,13 @@ def binaire_ffmpeg() -> str:
 
     raise ErreurLisible(
         "FFmpeg introuvable",
-        "Le décodeur audio n'est pas installé. Relancez « installer.bat », ou "
-        "installez-le à la main avec : pip install imageio-ffmpeg",
+        "Le décodeur audio est introuvable. "
+        + (
+            "Réinstallez l'application depuis son programme d'installation."
+            if chemins.EST_GELE
+            else "Relancez « installer.bat », ou installez-le à la main avec : "
+                 "pip install imageio-ffmpeg"
+        ),
     )
 
 

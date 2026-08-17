@@ -2,13 +2,17 @@
 .venv/
 __pycache__/
 *.pyc
+
+# Produits de construction. Le fichier packaging/whiscribe.spec, lui, est versionné :
+# c'est la recette, pas un résultat.
 build/
 dist/
-*.spec
+packaging/sortie/
 
 # Propre au poste : chemins locaux, préférences, secrets
 config.json
 jeton_hf.txt
+dossier-modeles.txt
 
 # Produits par l'application
 logs/
