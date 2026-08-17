@@ -239,12 +239,13 @@ begin
 end;
 
 function WebView2Present(): Boolean;
-const
-  CleClient = 'Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
-  CleClient32 = 'Software\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
+{ PascalScript refuse un bloc const local a une fonction : variables assignees en tete. }
 var
+  CleClient, CleClient32: String;
   Version: String;
 begin
+  CleClient := 'Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
+  CleClient32 := 'Software\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
   Version := VersionWebView2(HKEY_LOCAL_MACHINE, CleClient32);
   if Version = '' then
     Version := VersionWebView2(HKEY_LOCAL_MACHINE, CleClient);
