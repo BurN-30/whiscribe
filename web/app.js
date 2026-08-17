@@ -606,8 +606,11 @@ function appliquerTheme(mode) {
 }
 
 function themeSuivant() {
-  const ordre = ['auto', 'clair', 'sombre'];
-  const suivant = ordre[(ordre.indexOf(etat.config.theme || 'auto') + 1) % 3];
+  /* Bascule sur le thème réellement affiché : l'ancien cycle auto -> clair -> sombre
+     produisait un clic sans effet visible quand « clair » coïncidait avec le système. */
+  const affiche = document.documentElement.getAttribute('data-theme')
+    || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'sombre' : 'clair');
+  const suivant = affiche === 'sombre' ? 'clair' : 'sombre';
   appliquerTheme(suivant);
   enregistrer({ theme: suivant });
   journaliser('info', 'Thème : ' + suivant);
