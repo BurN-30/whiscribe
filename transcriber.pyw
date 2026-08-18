@@ -736,7 +736,10 @@ class Passerelle:
         self._fond(self._dialogue_fichiers)
 
     def _dialogue_fichiers(self) -> None:
-        extensions = " ".join(f"*{e}" for e in sorted(audio_module.EXTENSIONS_AUDIO))
+        # Séparateur ; imposé par pywebview : « Nom (*.ext1;*.ext2) ». Avec des
+        # espaces, parse_file_type refuse le filtre et le sélecteur ne s'ouvre
+        # jamais (bug constaté le 18/08 : clic sur la zone de dépôt sans effet).
+        extensions = ";".join(f"*{e}" for e in sorted(audio_module.EXTENSIONS_AUDIO))
         try:
             resultat = self._fenetre.create_file_dialog(
                 webview.OPEN_DIALOG, allow_multiple=True,

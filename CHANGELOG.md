@@ -6,6 +6,12 @@ version : la chaîne de publication en extrait la section correspondant au tag.
 
 ---
 
+## 2.2.1
+
+*Publiée le 18 août 2026.*
+
+- Correction : le clic sur la zone de dépôt (et Ctrl+O) n'ouvrait jamais le sélecteur de fichiers, le filtre d'extensions étant séparé par des espaces là où pywebview exige des points-virgules. Tous les filtres de dialogue sont désormais validés par le parseur de pywebview lui-même.
+
 ## 2.2.0
 
 *Publiée le 18 août 2026.*
