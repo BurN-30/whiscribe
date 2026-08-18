@@ -19,7 +19,7 @@ import subprocess
 import sys
 from dataclasses import dataclass, field, asdict
 
-from . import journal
+from . import journal, langues
 
 _CACHE: "Materiel | None" = None
 
@@ -38,7 +38,9 @@ class Gpu:
     vendeur: str  # "nvidia" | "amd" | "intel" | "autre"
     memoire_mo: int = 0
     accelere: bool = False
-    note: str = ""
+    #: Cle de traduction de la note, resolue a l'affichage. Le materiel est
+    #: detecte une fois pour toutes, la langue peut changer ensuite.
+    note_cle: str = ""
 
 
 @dataclass
@@ -47,12 +49,12 @@ class Accelerateur:
 
     nom: str
     genre: str = "npu"
-    note: str = ""
+    note_cle: str = ""
 
 
 @dataclass
 class Materiel:
-    cpu_nom: str = "Processeur inconnu"
+    cpu_nom: str = ""
     coeurs_physiques: int = 0
     coeurs_logiques: int = 0
     ram_go: float = 0.0
@@ -79,6 +81,12 @@ class Materiel:
 
     def en_dict(self) -> dict:
         donnees = asdict(self)
+        # Les notes sont traduites ici, pas à la détection : une bascule de
+        # langue doit les changer sans relancer l'inspection du matériel.
+        for carte in donnees.get("gpus") or []:
+            carte["note"] = langues.t(carte["note_cle"]) if carte.get("note_cle") else ""
+        for circuit in donnees.get("npus") or []:
+            circuit["note"] = langues.t(circuit["note_cle"]) if circuit.get("note_cle") else ""
         donnees["peripherique"] = self.peripherique
         donnees["type_calcul"] = self.type_calcul
         donnees["fils_calcul"] = self.fils_calcul
@@ -98,23 +106,27 @@ class Materiel:
         return 0 < self.ram_go < SEUIL_MEMOIRE_CRITIQUE
 
     def resume(self) -> str:
-        morceaux = [self.cpu_nom]
+        morceaux = [self.cpu_nom or langues.t("mat.cpu_inconnu")]
         if self.coeurs_logiques:
-            coeurs = f"{self.coeurs_logiques} fils"
             if self.coeurs_physiques and self.coeurs_physiques != self.coeurs_logiques:
-                coeurs = f"{self.coeurs_physiques} cœurs / {self.coeurs_logiques} fils"
-            morceaux.append(coeurs)
+                morceaux.append(langues.t(
+                    "mat.coeurs_fils",
+                    coeurs=self.coeurs_physiques, fils=self.coeurs_logiques,
+                ))
+            else:
+                morceaux.append(langues.t("mat.fils", n=self.coeurs_logiques))
         if self.ram_go:
-            morceaux.append(f"{self.ram_go:.0f} Go de mémoire")
+            morceaux.append(langues.t("mat.memoire", go=f"{self.ram_go:.0f}"))
         if self.cuda_disponible:
             nvidia = next((g for g in self.gpus if g.vendeur == "nvidia"), None)
-            morceaux.append(f"{nvidia.nom if nvidia else 'GPU NVIDIA'} (accéléré)")
+            morceaux.append(langues.t(
+                "mat.gpu_accelere", nom=nvidia.nom if nvidia else "GPU NVIDIA"))
         elif self.gpus:
-            morceaux.append(f"{self.gpus[0].nom} (non accéléré en v1)")
+            morceaux.append(langues.t("mat.gpu_non_accelere", nom=self.gpus[0].nom))
         else:
-            morceaux.append("pas de carte graphique dédiée")
+            morceaux.append(langues.t("mat.sans_gpu"))
         if self.npus:
-            morceaux.append(f"{self.npus[0].nom} (non exploité)")
+            morceaux.append(langues.t("mat.npu_non_exploite", nom=self.npus[0].nom))
         return ", ".join(morceaux)
 
 
@@ -138,8 +150,9 @@ def _nom_cpu() -> str:
                 return nom
         except OSError:
             pass
-    nom = platform.processor() or platform.machine()
-    return nom or "Processeur inconnu"
+    # Chaîne vide plutôt qu'un libellé figé : `Materiel.resume` traduit le repli
+    # au moment de l'affichage, dans la langue de l'interface du moment.
+    return platform.processor() or platform.machine() or ""
 
 
 def _coeurs() -> tuple[int, int]:
@@ -275,14 +288,7 @@ def _accelerateurs_neuronaux() -> list[Accelerateur]:
             nom = ligne.strip()
             if not nom:
                 continue
-            trouves.append(Accelerateur(
-                nom=nom,
-                genre="npu",
-                note=(
-                    "Détecté, non exploité en v1. Un NPU vise surtout l'autonomie sur "
-                    "batterie ; la piste OpenVINO est documentée comme évolution v1.x."
-                ),
-            ))
+            trouves.append(Accelerateur(nom=nom, genre="npu", note_cle="npu.note"))
     except Exception as exc:  # pragma: no cover - depend du poste
         journal.debug("Detection NPU impossible : %s", exc)
 
@@ -327,24 +333,13 @@ def detecter(forcer: bool = False) -> Materiel:
     for carte in cartes:
         if carte.vendeur == "nvidia":
             carte.accelere = cuda
-            carte.note = (
-                "Accélération CUDA active." if cuda else
-                "Carte NVIDIA détectée mais les bibliothèques CUDA de CTranslate2 ne "
-                "répondent pas. Relancez l'installateur pour les poser."
-            )
+            carte.note_cle = "gpu.note.cuda_active" if cuda else "gpu.note.cuda_absente"
         elif carte.vendeur == "amd":
-            carte.note = (
-                "Non accéléré en v1 : CTranslate2 ne gère que CPU et CUDA. "
-                "L'accélération AMD via whisper.cpp Vulkan est prévue en v1.x."
-            )
+            carte.note_cle = "gpu.note.amd"
         elif carte.vendeur == "intel":
-            carte.note = (
-                "Circuit graphique intégré, détecté mais non exploité en v1 : la "
-                "transcription tourne sur le processeur. Pistes v1.x : whisper.cpp "
-                "Vulkan, ou OpenVINO."
-            )
+            carte.note_cle = "gpu.note.intel"
         else:
-            carte.note = "Non accéléré en v1."
+            carte.note_cle = "gpu.note.autre"
 
     _CACHE = Materiel(
         cpu_nom=_nom_cpu(),

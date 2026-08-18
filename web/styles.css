@@ -1,5 +1,5 @@
 /* =========================================================================
-   WhiScribe — feuille de style
+   WhiScribe : feuille de style
 
    Direction : outil professionnel sobre. Une seule couleur d'accent, des
    cartes nettes sur fond neutre, typographie système, aucune fioriture.
@@ -150,7 +150,31 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border: 1px solid color-mix(in srgb, var(--vert) 25%, transparent);
 }
 
+/* Surveillance active : présence discrète, jamais une alerte. */
+.veille {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 550; color: var(--texte-doux);
+  background: var(--carte-creuse);
+  padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--bordure);
+}
+.veille svg { color: var(--accent); }
+.veille.defaut { color: var(--ambre); background: var(--ambre-fond); }
+.veille.defaut svg { color: var(--ambre); }
+
 .pousse { flex: 1; }
+
+/* -------------------------------------------------- Mise à jour disponible */
+
+.bandeau-maj {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 18px;
+  font-size: 12.5px; color: var(--accent);
+  background: var(--accent-doux);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.bandeau-maj .bouton { padding: 3px 10px; font-size: 12px; }
+.bandeau-maj .bouton-icone { width: 24px; height: 24px; }
 
 /* ------------------------------------------------------------------ Corps */
 
@@ -562,6 +586,137 @@ textarea { resize: vertical; font-family: var(--police-mono); font-size: 12.5px;
   transition: border-color var(--vitesse) ease, color var(--vitesse) ease;
 }
 .sortie:hover { border-color: var(--accent); color: var(--accent); }
+
+/* --------------------------------------------------------- Vue de lecture */
+
+.modale-lecture { max-width: 900px; max-height: 92vh; }
+
+.lecture-meta {
+  display: flex; flex-wrap: wrap; gap: 6px 16px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--bordure);
+  background: var(--carte-creuse);
+  font-size: 11.5px; color: var(--texte-faible);
+  font-variant-numeric: tabular-nums;
+}
+.lecture-meta .cle { color: var(--texte-doux); font-weight: 550; }
+
+.lecture-legende {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 11.5px; color: var(--texte-faible);
+  line-height: 1.5; margin-bottom: 14px;
+}
+.lecture-legende .exemple {
+  font-weight: 550; color: var(--ambre);
+  background: var(--ambre-fond);
+  border-bottom: 1px solid color-mix(in srgb, var(--ambre) 45%, transparent);
+  border-radius: 3px; padding: 0 4px; flex: none;
+}
+
+.lecture-texte { font-size: 14.5px; line-height: 1.75; user-select: text; }
+.lecture-para {
+  padding: 6px 10px; margin: 0 -10px 10px;
+  border-radius: var(--rayon-petit);
+  border: 1px solid transparent;
+  transition: background var(--vitesse) ease, border-color var(--vitesse) ease;
+}
+.lecture-para:last-child { margin-bottom: 0; }
+.lecture-para.ecoutable { cursor: pointer; }
+.lecture-para.ecoutable:hover { background: var(--carte-creuse); border-color: var(--bordure); }
+.lecture-para .locuteur {
+  display: block; font-size: 12px; font-weight: 650;
+  color: var(--accent); margin-bottom: 2px;
+}
+.lecture-para .horodatage {
+  font-size: 11px; color: var(--texte-faible);
+  font-variant-numeric: tabular-nums; margin-left: 8px; font-weight: 500;
+}
+
+/* Confiance : ambre discret, jamais criard. Seuls les mots incertains sont
+   marqués ; tous les autres restent du texte ordinaire, survolables. */
+.mot-doux {
+  background: color-mix(in srgb, var(--ambre-fond) 80%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--ambre) 40%, transparent);
+  border-radius: 3px; padding: 0 1px;
+}
+.mot-fort {
+  background: var(--ambre-fond); color: var(--ambre);
+  border-bottom: 1px solid var(--ambre);
+  border-radius: 3px; padding: 0 1px;
+}
+
+.lecture-retour { font-size: 12px; color: var(--texte-faible); }
+.lecture-retour.ok { color: var(--vert); }
+.lecture-retour.erreur { color: var(--rouge); }
+
+#lecture-audio audio { width: 100%; margin-bottom: 14px; }
+
+.bouton-flottant {
+  position: fixed; z-index: 80; display: none;
+  align-items: center; gap: 6px;
+  padding: 5px 11px; border-radius: 999px;
+  border: 1px solid var(--accent); background: var(--accent);
+  color: var(--accent-contraste);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  box-shadow: var(--ombre-forte);
+  transition: background var(--vitesse) ease;
+}
+.bouton-flottant.visible { display: inline-flex; }
+.bouton-flottant:hover { background: var(--accent-fort); }
+
+/* -------------------------------------------------------------- Reprises */
+
+.reprise-carte {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px;
+  border: 1px solid color-mix(in srgb, var(--ambre) 35%, transparent);
+  background: var(--ambre-fond);
+  border-radius: var(--rayon);
+}
+.reprise-carte + .reprise-carte { margin-top: 8px; }
+.reprise-carte svg { color: var(--ambre); flex: none; }
+.reprise-carte .infos { flex: 1; min-width: 0; }
+.reprise-carte .nom { font-size: 13px; font-weight: 600; color: var(--texte); }
+.reprise-carte .meta {
+  font-size: 11.5px; color: var(--ambre); margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------- Nom des fichiers produits */
+
+/* Aperçu du motif, sous le champ : le résultat exact, en police à chasse fixe
+   pour qu'un tiret de trop se voie. */
+.apercu-motif {
+  font-family: var(--police-mono); font-size: 11.5px;
+  color: var(--texte-doux); word-break: break-all;
+}
+.apercu-motif.probleme { color: var(--ambre); font-family: var(--police); }
+
+/* ------------------------------------------------------------ Espace utilisé */
+
+.stockage-poste {
+  border: 1px solid var(--bordure); border-radius: var(--rayon-petit);
+  padding: 11px 13px; background: var(--carte-creuse);
+}
+.stockage-poste + .stockage-poste { margin-top: 8px; }
+.stockage-poste .entete { display: flex; align-items: baseline; gap: 10px; }
+.stockage-poste .libelle { font-size: 13px; font-weight: 600; flex: 1; }
+.stockage-poste .taille {
+  font-size: 13px; font-weight: 650; color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.stockage-poste .chemin {
+  font-family: var(--police-mono); font-size: 11px; color: var(--texte-faible);
+  margin-top: 4px; word-break: break-all;
+}
+.stockage-poste .detail { font-size: 11.5px; color: var(--texte-doux); margin-top: 6px; }
+.stockage-poste .actions-poste { margin-top: 8px; }
+.stockage-total {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--bordure);
+  font-size: 13px;
+}
+.stockage-total .valeur { font-weight: 650; font-variant-numeric: tabular-nums; }
 
 @media (max-width: 1040px) {
   .colonne-laterale { width: 330px; }

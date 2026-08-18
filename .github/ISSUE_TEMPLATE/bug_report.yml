@@ -1,0 +1,82 @@
+name: Bug report
+description: Something does not work as described.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        **Please do not attach the audio file.** Recordings are often confidential, and they
+        are almost never needed to find a bug. The log file below is what helps.
+
+  - type: input
+    id: version
+    attributes:
+      label: WhiScribe version
+      description: Shown in the help panel of the application, or in the name of the setup file.
+      placeholder: "2.2.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it
+      options:
+        - Setup (WhiScribe-Setup-X.Y.Z.exe)
+        - From source (installer.bat or manual)
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead.
+      placeholder: |
+        1. Dropped a 45 min .m4a file
+        2. Picked the Fast preset, started
+        3. At around 60 %, the queue stopped and the status bar said ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log file
+      description: |
+        Paste the content of the detailed log, or attach the file by dragging it into this field.
+
+        Where to find it: the **Open the detailed log** button in the bottom bar of the
+        application opens it directly. Otherwise it is the most recent file in the `logs/`
+        folder, next to your settings: `%LOCALAPPDATA%\WhiScribe\logs` for the installed
+        version, `logs/` inside the repository for the source version.
+
+        The log is written in French, that is normal, it is aimed at the maintainer.
+        It contains file names and machine characteristics, never the audio nor the
+        transcribed text. Feel free to redact anything you would rather not publish.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: machine
+    attributes:
+      label: Machine
+      description: |
+        Windows version, processor, memory, and the graphics card if you have one.
+        The **Your hardware** card in the application shows all of it.
+      placeholder: "Windows 11 24H2, Core Ultra 7 155U, 32 GB, no dedicated card"
+    validations:
+      required: false
+
+  - type: textarea
+    id: audio
+    attributes:
+      label: About the recording (no file, please)
+      description: Format, duration, one speaker or several, spoken language, room audio or headset.
+      placeholder: "m4a from a phone, 45 min, 4 speakers in a meeting room, French"
+    validations:
+      required: false

@@ -16,13 +16,13 @@
 ;      configuration, ni le glossaire, ni les corrections, ni les modèles.
 ;
 ;  Compilation :
-;      iscc /DVersionApp=2.1.0 packaging\setup.iss
+;      iscc /DVersionApp=2.2.0 packaging\setup.iss
 ;
 ;  Le dossier « dist\WhiScribe » doit exister au préalable.
 ; ===========================================================================
 
 #ifndef VersionApp
-  #define VersionApp "2.1.0"
+  #define VersionApp "2.2.0"
 #endif
 
 #define NomApp        "WhiScribe"
@@ -45,7 +45,7 @@ AppVerName={#NomApp} {#VersionApp}
 VersionInfoVersion={#VersionApp}
 VersionInfoProductVersion={#VersionApp}
 VersionInfoProductName={#NomApp}
-VersionInfoDescription=Programme d'installation de {#NomApp}
+VersionInfoDescription={#NomApp} Setup
 VersionInfoCompany={#Editeur}
 VersionInfoCopyright=Licence MIT, {#Editeur}
 AppPublisher={#Editeur}
@@ -89,18 +89,40 @@ OutputBaseFilename={#NomApp}-Setup-{#VersionApp}
 SetupIconFile=whiscribe.ico
 WizardStyle=modern
 WizardSizePercent=110
+; Aucune boîte de choix de langue : Inno retient tout seul la langue d'interface
+; de Windows quand elle figure dans la liste ci-dessous. L'ANGLAIS EST LISTÉ EN
+; PREMIER, il fait donc office de repli hors francophonie, exactement comme
+; l'application elle-même (voir app/langues.py).
 ShowLanguageDialog=no
 
 [Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "french"; MessagesFile: "compiler:Languages\French.isl"
 
 [CustomMessages]
+english.PageModelesTitre=Location of the transcription models
+english.PageModelesDescription=Where should the speech recognition files be stored?
+english.PageModelesTexte=The models are large and are downloaded once, the first time you use the application, not during this installation.%n%n    "Fast" preset: about 1.6 GB%n    "Highest quality" preset: about 3.1 GB%n%nIf your system drive is short on space, pick another drive. This location can be changed later, in the application settings, "Models" section.
+english.PageModelesLibelle=Store the models in this folder:
+english.TacheBureau=Create a &Desktop shortcut
+english.LancerApp=Launch {#NomApp}
+english.RaccourciCommentaire=Audio transcription, entirely on your own machine
+english.WebView2Titre=Microsoft WebView2 component
+english.WebView2Description=Downloading the display component from the Microsoft website
+english.WebView2Manquant={#NomApp} displays its window through "Microsoft Edge WebView2 Runtime", which is not present on this machine.%n%nIt will be downloaded from the Microsoft website, then installed. Expect a few tens of megabytes.%n%nDo you want to continue?
+english.WebView2Echec=The WebView2 component could not be installed automatically.%n%nThe installation of {#NomApp} will carry on, but the window will not open until that component is present. You can install it from:%n%n{#UrlWebView2}
+english.EspaceInsuffisant=Only about %1 GB is free on this drive.%n%nThe highest quality model needs 3.1 GB on its own. Do you want to keep this location anyway?
+english.DossierModelesRefuse=This folder could not be created, or is not writable.%n%nPlease choose another location.
+english.DesinstallerModeles=Also delete the transcription models?%n%nThey take up %1 in:%n%2%n%nAnswer No to keep them: a reinstall will find them again and will have nothing to download.
+english.DesinstallerDonnees=Also delete your personal {#NomApp} data?%n%nThis would permanently erase your glossary, your correction rules, your settings and the logs, in:%n%1%n%nAnswer No to keep them.
+
 french.PageModelesTitre=Emplacement des modèles de transcription
 french.PageModelesDescription=Où faut-il ranger les fichiers de reconnaissance vocale ?
 french.PageModelesTexte=Les modèles sont volumineux et se téléchargent une seule fois, au premier usage de l'application, pas pendant cette installation.%n%n    Preset « Rapide » : environ 1,6 Go%n    Preset « Qualité maximale » : environ 3,1 Go%n%nSi votre disque système est à l'étroit, choisissez un autre disque. Cet emplacement reste modifiable plus tard, dans les réglages de l'application, section « Modèles ».
 french.PageModelesLibelle=Ranger les modèles dans ce dossier :
 french.TacheBureau=Créer une icône sur le &Bureau
 french.LancerApp=Lancer {#NomApp}
+french.RaccourciCommentaire=Transcription audio, entièrement sur votre machine
 french.WebView2Titre=Composant Microsoft WebView2
 french.WebView2Description=Téléchargement du composant d'affichage depuis le site de Microsoft
 french.WebView2Manquant=L'affichage de {#NomApp} s'appuie sur « Microsoft Edge WebView2 Runtime », qui n'est pas présent sur ce poste.%n%nIl va être téléchargé depuis le site de Microsoft, puis installé. Comptez quelques dizaines de mégaoctets.%n%nVoulez-vous continuer ?
@@ -118,7 +140,7 @@ Name: "desktopicon"; Description: "{cm:TacheBureau}"; GroupDescription: "{cm:Add
 Source: "{#DossierSource}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#NomApp}"; Filename: "{app}\{#ExeApp}"; WorkingDir: "{app}"; Comment: "Transcription audio, entièrement sur votre machine"
+Name: "{group}\{#NomApp}"; Filename: "{app}\{#ExeApp}"; WorkingDir: "{app}"; Comment: "{cm:RaccourciCommentaire}"
 Name: "{group}\{cm:UninstallProgram,{#NomApp}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#NomApp}"; Filename: "{app}\{#ExeApp}"; WorkingDir: "{app}"; Tasks: desktopicon
 

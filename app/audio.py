@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import chemins, journal
+from . import chemins, journal, langues
 from .journal import ErreurLisible
 
 EXTENSIONS_AUDIO = {
@@ -92,14 +92,9 @@ def binaire_ffmpeg() -> str:
         return systeme
 
     raise ErreurLisible(
-        "FFmpeg introuvable",
-        "Le décodeur audio est introuvable. "
-        + (
-            "Réinstallez l'application depuis son programme d'installation."
-            if chemins.EST_GELE
-            else "Relancez « installer.bat », ou installez-le à la main avec : "
-                 "pip install imageio-ffmpeg"
-        ),
+        langues.t("audio.ffmpeg.titre"),
+        langues.t("audio.ffmpeg.msg_installee" if chemins.EST_GELE
+                  else "audio.ffmpeg.msg_sources"),
     )
 
 
@@ -113,6 +108,34 @@ def ffmpeg_present() -> bool:
 
 def est_audio(chemin: str | Path) -> bool:
     return Path(chemin).suffix.lower() in EXTENSIONS_AUDIO
+
+
+def lister_dossier(dossier: str | Path) -> tuple[list[str], int]:
+    """
+    Fichiers audio d'un dossier, premier niveau seulement.
+
+    Volontairement non récursif : déposer un dossier de projet entier ne doit
+    pas déclencher trente heures de calcul par surprise. Renvoie les chemins
+    retenus, triés, et le nombre d'entrées écartées.
+    """
+    cible = Path(str(dossier or "")).expanduser()
+    if not cible.is_dir():
+        return [], 0
+    retenus: list[str] = []
+    ignores = 0
+    try:
+        entrees = sorted(cible.iterdir())
+    except OSError:
+        return [], 0
+    for entree in entrees:
+        try:
+            if entree.is_file() and est_audio(entree):
+                retenus.append(str(entree))
+            else:
+                ignores += 1
+        except OSError:
+            ignores += 1
+    return retenus, ignores
 
 
 _MOTIF_DUREE = re.compile(r"Duration:\s*(\d+):(\d\d):(\d\d(?:\.\d+)?)")
@@ -156,8 +179,8 @@ def decoder(chemin: str | Path, filtres_salle: bool = False) -> np.ndarray:
 
     if not fichier.exists():
         raise ErreurLisible(
-            "Fichier introuvable",
-            f"« {fichier.name} » n'existe plus à l'emplacement indiqué.",
+            langues.t("audio.introuvable.titre"),
+            langues.t("audio.introuvable.msg", nom=fichier.name),
         )
 
     commande = [
@@ -179,8 +202,8 @@ def decoder(chemin: str | Path, filtres_salle: bool = False) -> np.ndarray:
         )
     except Exception as exc:
         raise ErreurLisible(
-            "Décodage impossible",
-            f"FFmpeg n'a pas pu être lancé sur « {fichier.name} ».",
+            langues.t("audio.decodage.titre"),
+            langues.t("audio.decodage.msg", nom=fichier.name),
             exc,
         ) from exc
 
@@ -188,17 +211,16 @@ def decoder(chemin: str | Path, filtres_salle: bool = False) -> np.ndarray:
         detail = (resultat.stderr or b"").decode("utf-8", "replace").strip()
         journal.erreur("FFmpeg a échoué sur %s : %s", fichier.name, detail[:2000])
         raise ErreurLisible(
-            "Fichier audio illisible",
-            f"« {fichier.name} » n'a pas pu être décodé : le fichier est peut-être "
-            "corrompu, incomplet, ou ne contient aucune piste audio. Le détail "
-            f"FFmpeg est dans logs/{journal.nom_fichier()}.",
+            langues.t("audio.illisible.titre"),
+            langues.t("audio.illisible.msg",
+                      nom=fichier.name, journal=journal.nom_fichier()),
         )
 
     signal = np.frombuffer(resultat.stdout, dtype=np.float32)
     if signal.size == 0:
         raise ErreurLisible(
-            "Aucun son détecté",
-            f"« {fichier.name} » ne contient aucune donnée audio exploitable.",
+            langues.t("audio.muet.titre"),
+            langues.t("audio.muet.msg", nom=fichier.name),
         )
 
     # Copie explicite : le tampon de frombuffer est en lecture seule.
@@ -216,8 +238,5 @@ def decoder(chemin: str | Path, filtres_salle: bool = False) -> np.ndarray:
 
 
 def formater_taille(octets: int) -> str:
-    if octets >= 1024 ** 3:
-        return f"{octets / 1024 ** 3:.1f} Go"
-    if octets >= 1024 ** 2:
-        return f"{octets / 1024 ** 2:.1f} Mo"
-    return f"{octets / 1024:.0f} Ko"
+    """Taille d'un fichier, unités et séparateur décimal de la langue courante."""
+    return langues.octets(octets)

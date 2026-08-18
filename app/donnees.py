@@ -10,6 +10,7 @@ Ce qui part dans l'archive :
 
   - `vocabulaire.txt`  : le glossaire ;
   - `corrections.txt`  : la table de corrections ;
+  - `gabarit-ia.txt`   : le gabarit d'instructions pour l'IA, s'il existe ;
   - `config.json`      : les réglages ;
   - `manifeste.json`   : version de l'application, date, liste des fichiers.
 
@@ -32,16 +33,23 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
-from . import VERSION, NOM_APPLICATION, chemins, journal, vocabulaire
+from . import VERSION, NOM_APPLICATION, chemins, journal, langues, vocabulaire
 
 NOM_MANIFESTE = "manifeste.json"
 
 #: Version du format d'archive. Un export produit par une version future de
 #: l'application sera refusé plutôt que mal interprété.
-FORMAT_ARCHIVE = 1
+#:
+#: Format 1 : glossaire, corrections, réglages. Format 2 : le gabarit
+#: d'instructions pour l'IA en plus, et seulement s'il existe sur le poste de
+#: départ. Les deux se relisent. Une archive de format 1 n'efface donc jamais
+#: le gabarit en place ici : ce qu'elle ne transporte pas, elle ne le remplace
+#: pas.
+FORMAT_ARCHIVE = 2
 
 #: Les seuls membres acceptés dans une archive. Tout le reste la fait rejeter.
-FICHIERS_TEXTE = ("vocabulaire.txt", "corrections.txt")
+FICHIER_GABARIT = "gabarit-ia.txt"
+FICHIERS_TEXTE = ("vocabulaire.txt", "corrections.txt", FICHIER_GABARIT)
 FICHIER_CONFIG = "config.json"
 MEMBRES_AUTORISES = (NOM_MANIFESTE, FICHIER_CONFIG, *FICHIERS_TEXTE)
 
@@ -51,30 +59,20 @@ TAILLE_MAX_ARCHIVE = 8 * 1024 * 1024
 TAILLE_MAX_MEMBRE = 2 * 1024 * 1024
 TAILLE_MAX_TOTALE = 8 * 1024 * 1024
 
-#: Libellés des réglages, pour l'aperçu affiché avant écriture.
-LIBELLES_REGLAGES = {
-    "preset": "Qualité de transcription",
-    "langue": "Langue parlée",
-    "dossier_sortie": "Dossier de sortie",
-    "diarisation": "Séparer les locuteurs",
-    "nb_locuteurs": "Nombre de participants",
-    "formats": "Formats produits",
-    "appliquer_corrections": "Appliquer les corrections",
-    "utiliser_glossaire": "Souffler le glossaire au modèle",
-    "filtres_salle": "Audio de salle",
-    "mode_avance": "Mode avancé",
-    "modele_avance": "Modèle du mode avancé",
-    "beam_size": "Largeur de faisceau",
-    "condition_on_previous_text": "Garder le contexte",
-    "forcer_processeur": "Forcer le processeur",
-    "theme": "Thème",
-    "zoom": "Zoom de l'interface",
-    "journal_ouvert": "Journal déplié",
-}
-
 #: Réglages dont l'aperçu ne parle pas : ils changent à chaque clic et ne
 #: renseignent personne sur ce qu'un import va vraiment modifier.
 REGLAGES_DISCRETS = ("zoom", "journal_ouvert")
+
+
+def libelle_reglage(cle: str) -> str:
+    """
+    Libellé d'un réglage dans l'aperçu d'import, langue de l'interface.
+
+    La langue de l'interface est un réglage comme un autre : elle voyage dans
+    l'export et l'aperçu la nomme, au même titre que le thème ou le preset.
+    """
+    traduit = langues.t("reglage." + cle)
+    return cle if traduit == "reglage." + cle else traduit
 
 
 # ---------------------------------------------------------------------------
@@ -139,18 +137,20 @@ def _cles_config() -> tuple[str, ...]:
 
 def _formater_valeur(cle: str, valeur) -> str:
     if isinstance(valeur, bool):
-        return "oui" if valeur else "non"
+        return langues.t("val.oui" if valeur else "val.non")
     if cle == "formats" and isinstance(valeur, dict):
         actifs = [nom for nom, actif in valeur.items() if actif]
-        return ", ".join(actifs) if actifs else "aucun"
+        return ", ".join(actifs) if actifs else langues.t("val.aucun")
     if cle == "nb_locuteurs" and not valeur:
-        return "détection automatique"
+        return langues.t("val.auto")
     if cle in ("beam_size", "modele_avance") and not valeur:
-        return "valeur du preset"
+        return langues.t("val.preset")
+    if cle == "langue_interface":
+        return langues.t("langue." + str(valeur)) if valeur else langues.t("val.vide")
     if isinstance(valeur, float):
-        return f"{valeur:.2f}".replace(".", ",")
+        return langues.nombre(valeur, 2)
     texte = str(valeur)
-    return texte if texte else "vide"
+    return texte if texte else langues.t("val.vide")
 
 
 # ---------------------------------------------------------------------------
@@ -158,12 +158,22 @@ def _formater_valeur(cle: str, valeur) -> str:
 # ---------------------------------------------------------------------------
 
 def _contenu_a_exporter() -> tuple[dict, dict]:
-    """Renvoie (fichiers du zip, manifeste) pour l'état courant."""
+    """
+    Renvoie (fichiers du zip, manifeste) pour l'état courant.
+
+    Le gabarit d'instructions n'est joint que s'il existe déjà : l'export ne
+    doit rien créer sur le poste de départ, et une archive sans gabarit reste
+    parfaitement valide.
+    """
     fichiers = {
         "vocabulaire.txt": _lire_texte(chemins.FICHIER_VOCABULAIRE),
         "corrections.txt": _lire_texte(chemins.FICHIER_CORRECTIONS),
         FICHIER_CONFIG: json.dumps(_config_courante(), indent=2, ensure_ascii=False) + "\n",
     }
+    if chemins.FICHIER_GABARIT_IA.is_file():
+        gabarit_courant = _lire_texte(chemins.FICHIER_GABARIT_IA)
+        if gabarit_courant.strip():
+            fichiers[FICHIER_GABARIT] = gabarit_courant
     manifeste = {
         "application": NOM_APPLICATION,
         "format": FORMAT_ARCHIVE,
@@ -189,7 +199,7 @@ def exporter(destination: str | Path) -> dict:
     """
     cible = Path(str(destination or "")).expanduser()
     if not cible.name:
-        return {"ok": False, "message": "Aucun emplacement d'enregistrement choisi."}
+        return {"ok": False, "message": langues.t("arch.aucun_emplacement")}
     if cible.suffix.lower() != ".zip":
         cible = cible.with_suffix(".zip")
 
@@ -210,9 +220,12 @@ def exporter(destination: str | Path) -> dict:
             provisoire.unlink(missing_ok=True)
         except OSError:
             pass
-        titre, message = journal.expliquer(exc, "export des données")
+        titre, message = journal.expliquer(exc, langues.t("contexte.export"))
         journal.exception("Export des données en échec", exc)
-        return {"ok": False, "message": f"{titre} : {message}"}
+        return {
+            "ok": False,
+            "message": langues.t("format.titre_message", titre=titre, message=message),
+        }
 
     resume = vocabulaire.termes(fichiers["vocabulaire.txt"])
     regles, _ = vocabulaire.analyser_corrections(fichiers["corrections.txt"])
@@ -223,10 +236,9 @@ def exporter(destination: str | Path) -> dict:
         "ok": True,
         "chemin": str(cible),
         "fichiers": manifeste["fichiers"],
-        "message": (
-            f"{len(resume)} terme(s) de glossaire, {len(regles)} règle(s) de correction et "
-            f"vos réglages ont été enregistrés dans « {cible} ». Le jeton Hugging Face, "
-            "les journaux et les modèles n'y sont pas."
+        "message": langues.t(
+            "arch.export_message",
+            termes=len(resume), regles=len(regles), chemin=cible,
         ),
     }
 
@@ -238,12 +250,9 @@ def exporter(destination: str | Path) -> dict:
 def _verifier_nom_membre(nom: str) -> None:
     """Refuse tout ce qui ressemble à une sortie de l'archive."""
     if nom not in MEMBRES_AUTORISES:
-        raise ErreurArchive(
-            f"L'archive contient un élément inattendu (« {nom} »). Ce n'est pas un "
-            "export WhiScribe, ou il a été modifié."
-        )
+        raise ErreurArchive(langues.t("arch.membre_inattendu", nom=nom))
     if nom.endswith("/") or "\\" in nom or ".." in Path(nom).parts or Path(nom).is_absolute():
-        raise ErreurArchive("L'archive contient un chemin de fichier invalide, elle est refusée.")
+        raise ErreurArchive(langues.t("arch.chemin_invalide"))
 
 
 def _ouvrir_archive(chemin: str | Path) -> tuple[dict, dict]:
@@ -254,52 +263,42 @@ def _ouvrir_archive(chemin: str | Path) -> tuple[dict, dict]:
     """
     source = Path(str(chemin or "")).expanduser()
     if not source.is_file():
-        raise ErreurArchive("Ce fichier n'existe plus, ou n'est pas lisible.")
+        raise ErreurArchive(langues.t("arch.fichier_absent"))
 
     try:
         taille = source.stat().st_size
     except OSError as exc:
-        raise ErreurArchive(f"Ce fichier n'a pas pu être lu ({exc.strerror or exc}).") from exc
+        raise ErreurArchive(
+            langues.t("arch.fichier_illisible", erreur=exc.strerror or exc)) from exc
 
     if taille == 0:
-        raise ErreurArchive("Ce fichier est vide.")
+        raise ErreurArchive(langues.t("arch.vide"))
     if taille > TAILLE_MAX_ARCHIVE:
-        raise ErreurArchive(
-            "Ce fichier est bien trop gros pour un export WhiScribe "
-            f"({taille / 1024 / 1024:.1f} Mo). Un export pèse quelques kilooctets."
-        )
+        raise ErreurArchive(langues.t(
+            "arch.trop_gros", mo=langues.nombre(taille / 1024 / 1024, 1)))
     if not zipfile.is_zipfile(str(source)):
-        raise ErreurArchive(
-            "Ce fichier n'est pas une archive zip lisible. Il est peut-être abîmé, "
-            "ou ce n'est pas le bon fichier."
-        )
+        raise ErreurArchive(langues.t("arch.pas_zip"))
 
     membres: dict[str, str] = {}
     try:
         with zipfile.ZipFile(str(source)) as archive:
             abime = archive.testzip()
             if abime:
-                raise ErreurArchive(
-                    f"L'archive est abîmée : le fichier « {abime} » qu'elle contient est illisible."
-                )
+                raise ErreurArchive(langues.t("arch.abimee", nom=abime))
 
             infos = archive.infolist()
             if not infos:
-                raise ErreurArchive("Cette archive est vide.")
+                raise ErreurArchive(langues.t("arch.archive_vide"))
 
             total = 0
             for info in infos:
                 _verifier_nom_membre(info.filename)
                 if info.file_size > TAILLE_MAX_MEMBRE:
                     raise ErreurArchive(
-                        f"Le fichier « {info.filename} » de l'archive est anormalement gros, "
-                        "l'import est refusé."
-                    )
+                        langues.t("arch.membre_trop_gros", nom=info.filename))
                 total += info.file_size
             if total > TAILLE_MAX_TOTALE:
-                raise ErreurArchive(
-                    "Le contenu de cette archive est anormalement volumineux, l'import est refusé."
-                )
+                raise ErreurArchive(langues.t("arch.contenu_volumineux"))
 
             for info in infos:
                 brut = archive.read(info.filename)
@@ -307,68 +306,60 @@ def _ouvrir_archive(chemin: str | Path) -> tuple[dict, dict]:
                     membres[info.filename] = brut.decode("utf-8")
                 except UnicodeDecodeError as exc:
                     raise ErreurArchive(
-                        f"Le fichier « {info.filename} » de l'archive n'est pas du texte "
-                        "lisible (encodage attendu : UTF-8)."
-                    ) from exc
+                        langues.t("arch.membre_non_texte", nom=info.filename)) from exc
     except zipfile.BadZipFile as exc:
-        raise ErreurArchive(
-            "Cette archive zip est corrompue et n'a pas pu être ouverte."
-        ) from exc
+        raise ErreurArchive(langues.t("arch.zip_corrompue")) from exc
     except OSError as exc:
-        raise ErreurArchive(f"Ce fichier n'a pas pu être lu ({exc.strerror or exc}).") from exc
+        raise ErreurArchive(
+            langues.t("arch.fichier_illisible", erreur=exc.strerror or exc)) from exc
 
     if NOM_MANIFESTE not in membres:
-        raise ErreurArchive(
-            "Ce fichier n'est pas un export WhiScribe : son manifeste est absent."
-        )
+        raise ErreurArchive(langues.t("arch.manifeste_absent"))
 
     try:
         manifeste = json.loads(membres[NOM_MANIFESTE])
     except json.JSONDecodeError as exc:
-        raise ErreurArchive("Le manifeste de cette archive est illisible.") from exc
+        raise ErreurArchive(langues.t("arch.manifeste_illisible")) from exc
     if not isinstance(manifeste, dict):
-        raise ErreurArchive("Le manifeste de cette archive n'a pas la forme attendue.")
+        raise ErreurArchive(langues.t("arch.manifeste_forme"))
     if str(manifeste.get("application", "")).strip().lower() != NOM_APPLICATION.lower():
-        raise ErreurArchive(
-            "Ce fichier n'est pas un export WhiScribe : son manifeste annonce "
-            f"« {manifeste.get('application') or 'application inconnue'} »."
-        )
+        raise ErreurArchive(langues.t(
+            "arch.autre_application",
+            application=manifeste.get("application")
+            or langues.t("arch.application_inconnue"),
+        ))
 
     try:
         format_archive = int(manifeste.get("format", 0))
     except (TypeError, ValueError):
         format_archive = 0
+    # Tous les formats de 1 au format courant se relisent. Un membre que le
+    # format d'origine ne connaissait pas est simplement absent, et ce qui est
+    # absent n'est pas touché à l'import.
     if format_archive < 1:
-        raise ErreurArchive("Le manifeste de cette archive n'indique pas de format valide.")
+        raise ErreurArchive(langues.t("arch.format_invalide"))
     if format_archive > FORMAT_ARCHIVE:
-        raise ErreurArchive(
-            f"Cet export a été produit par une version plus récente de {NOM_APPLICATION} "
-            f"(format {format_archive}, cette version lit le format {FORMAT_ARCHIVE}). "
-            "Mettez l'application à jour avant de l'importer."
-        )
+        raise ErreurArchive(langues.t(
+            "arch.format_recent", application=NOM_APPLICATION,
+            format=format_archive, lu=FORMAT_ARCHIVE,
+        ))
 
     declares = manifeste.get("fichiers")
     if not isinstance(declares, list) or not declares:
-        raise ErreurArchive("Le manifeste de cette archive ne déclare aucun fichier.")
+        raise ErreurArchive(langues.t("arch.aucun_declare"))
     for nom in declares:
         if not isinstance(nom, str) or nom not in MEMBRES_AUTORISES:
-            raise ErreurArchive(
-                f"Le manifeste déclare un fichier inattendu (« {nom} »), l'import est refusé."
-            )
+            raise ErreurArchive(langues.t("arch.declare_inattendu", nom=nom))
         if nom not in membres:
-            raise ErreurArchive(
-                f"Le manifeste annonce « {nom} », mais l'archive ne le contient pas."
-            )
+            raise ErreurArchive(langues.t("arch.declare_absent", nom=nom))
 
     if FICHIER_CONFIG in membres:
         try:
             valeur = json.loads(membres[FICHIER_CONFIG])
         except json.JSONDecodeError as exc:
-            raise ErreurArchive(
-                "Les réglages de cette archive (config.json) sont illisibles."
-            ) from exc
+            raise ErreurArchive(langues.t("arch.config_illisible")) from exc
         if not isinstance(valeur, dict):
-            raise ErreurArchive("Les réglages de cette archive n'ont pas la forme attendue.")
+            raise ErreurArchive(langues.t("arch.config_forme"))
 
     return membres, manifeste
 
@@ -391,6 +382,7 @@ def analyser(chemin: str | Path) -> dict:
 
     glossaire = membres.get("vocabulaire.txt", "")
     corrections = membres.get("corrections.txt", "")
+    gabarit_present = bool(membres.get(FICHIER_GABARIT, "").strip())
     termes_import = vocabulaire.termes(glossaire)
     regles_import, erreurs_import = vocabulaire.analyser_corrections(corrections)
 
@@ -413,7 +405,7 @@ def analyser(chemin: str | Path) -> dict:
             continue
         changements.append({
             "cle": cle,
-            "libelle": LIBELLES_REGLAGES.get(cle, cle),
+            "libelle": libelle_reglage(cle),
             "avant": _formater_valeur(cle, avant),
             "apres": _formater_valeur(cle, apres),
         })
@@ -435,6 +427,12 @@ def analyser(chemin: str | Path) -> dict:
             "nb_actuel": len(regles_actuelles),
             "erreurs": erreurs_import,
         },
+        # Le gabarit n'est annoncé que lorsqu'il est là : une archive qui n'en
+        # porte pas ne remplacera pas celui du poste, il n'y a rien à dire.
+        "gabarit": {
+            "present": gabarit_present,
+            "message": langues.t("arch.gabarit_inclus") if gabarit_present else "",
+        },
         "reglages": changements,
         "chemins": chemins_machine,
         "sauvegarde": nom_sauvegarde_avant_import(),
@@ -444,9 +442,9 @@ def analyser(chemin: str | Path) -> dict:
 
 def _date_lisible(iso: str) -> str:
     try:
-        return f"{datetime.fromisoformat(str(iso)):%d/%m/%Y à %H:%M}"
+        return datetime.fromisoformat(str(iso)).strftime(langues.t("format.date_heure"))
     except (TypeError, ValueError):
-        return str(iso or "date inconnue")
+        return str(iso or "") or langues.t("val.date_inconnue")
 
 
 def _examiner_chemins(config_import: dict, manifeste: dict, config_actuelle: dict) -> list[dict]:
@@ -471,21 +469,24 @@ def _examiner_chemins(config_import: dict, manifeste: dict, config_actuelle: dic
             "valeur": texte,
             "repris": existe,
             "actuel": str(actuel or ""),
-            "message": (
-                f"{libelle} : « {texte} » sera repris."
-                if existe else
-                f"{libelle} : « {texte} » n'existe pas sur ce poste, "
-                f"votre réglage actuel est conservé."
+            "message": langues.t(
+                "arch.chemin_repris" if existe else "arch.chemin_absent",
+                libelle=libelle, valeur=texte,
             ),
         })
 
     examiner(
-        "Dossier de sortie",
+        langues.t("arch.libelle.sortie"),
         config_import.get("dossier_sortie"),
         config_actuelle.get("dossier_sortie", ""),
     )
     examiner(
-        "Dossier des modèles",
+        langues.t("arch.libelle.surveille"),
+        config_import.get("dossier_surveille"),
+        config_actuelle.get("dossier_surveille", ""),
+    )
+    examiner(
+        langues.t("arch.libelle.modeles"),
         manifeste.get("dossier_modeles"),
         str(chemins.DOSSIER_MODELES),
     )
@@ -506,10 +507,8 @@ def sauvegarder_etat_courant(nom: str | None = None) -> Path:
     cible = chemins.RACINE / (nom or nom_sauvegarde_avant_import())
     resultat = exporter(cible)
     if not resultat.get("ok"):
-        raise ErreurArchive(
-            "La sauvegarde de vos données actuelles a échoué, l'import est annulé pour ne "
-            f"rien écraser. {resultat.get('message', '')}".strip()
-        )
+        raise ErreurArchive(langues.t(
+            "arch.sauvegarde_echouee", detail=resultat.get("message", "")).strip())
     return cible
 
 
@@ -544,12 +543,19 @@ def importer(chemin: str | Path) -> dict:
             _ecrire_atomique(
                 chemins.FICHIER_CORRECTIONS, membres["corrections.txt"].rstrip() + "\n"
             )
+        # Archive de format 1, ou archive de format 2 sans gabarit : le gabarit
+        # déjà en place reste tel quel. Il appartient à l'utilisateur.
+        if membres.get(FICHIER_GABARIT, "").strip():
+            _ecrire_atomique(
+                chemins.FICHIER_GABARIT_IA, membres[FICHIER_GABARIT].rstrip() + "\n"
+            )
+            notes.append(langues.t("arch.note.gabarit_repris"))
 
         config_finale = dict(config_actuelle)
         if FICHIER_CONFIG in membres:
             config_import = json.loads(membres[FICHIER_CONFIG])
             for cle in _cles_config():
-                if cle not in config_import or cle == "dossier_sortie":
+                if cle not in config_import or cle in ("dossier_sortie", "dossier_surveille"):
                     continue
                 valeur = config_import[cle]
                 if isinstance(config_finale.get(cle), dict) and isinstance(valeur, dict):
@@ -560,13 +566,22 @@ def importer(chemin: str | Path) -> dict:
             demande = str(config_import.get("dossier_sortie", "") or "").strip()
             if demande and Path(demande).expanduser().is_dir():
                 config_finale["dossier_sortie"] = demande
-                notes.append(f"Dossier de sortie repris : « {demande} ».")
+                notes.append(langues.t("arch.note.sortie_reprise", chemin=demande))
             elif demande and demande != str(config_actuelle.get("dossier_sortie", "")):
-                notes.append(
-                    f"Le dossier de sortie de l'export, « {demande} », n'existe pas sur ce "
-                    f"poste : votre dossier « {config_actuelle.get('dossier_sortie', '')} » "
-                    "est conservé."
-                )
+                notes.append(langues.t(
+                    "arch.note.sortie_absente", demande=demande,
+                    actuel=config_actuelle.get("dossier_sortie", ""),
+                ))
+
+            # Le dossier surveillé suit la même règle : un chemin venu d'un
+            # autre poste ne doit pas être scruté ici sans exister.
+            surveille = str(config_import.get("dossier_surveille", "") or "").strip()
+            if surveille and Path(surveille).expanduser().is_dir():
+                config_finale["dossier_surveille"] = surveille
+                notes.append(langues.t("arch.note.surveille_repris", chemin=surveille))
+            elif surveille:
+                config_finale["surveillance"] = False
+                notes.append(langues.t("arch.note.surveille_absent", chemin=surveille))
 
         from . import config as config_module
 
@@ -576,21 +591,20 @@ def importer(chemin: str | Path) -> dict:
         if demande_modeles and demande_modeles != str(chemins.DOSSIER_MODELES):
             if Path(demande_modeles).expanduser().is_dir():
                 chemins.definir_dossier_modeles(demande_modeles, memoriser=True)
-                notes.append(f"Dossier des modèles repris : « {demande_modeles} ».")
+                notes.append(langues.t(
+                    "arch.note.modeles_repris", chemin=demande_modeles))
             else:
-                notes.append(
-                    f"Le dossier des modèles de l'export, « {demande_modeles} », n'existe pas "
-                    f"sur ce poste : « {chemins.DOSSIER_MODELES} » est conservé."
-                )
+                notes.append(langues.t(
+                    "arch.note.modeles_absents", demande=demande_modeles,
+                    actuel=chemins.DOSSIER_MODELES,
+                ))
     except (OSError, json.JSONDecodeError) as exc:
-        titre, message = journal.expliquer(exc, "import des données")
+        titre, message = journal.expliquer(exc, langues.t("contexte.import"))
         journal.exception("Import des données en échec", exc)
         return {
             "ok": False,
-            "message": (
-                f"{titre} : {message} Vos données d'avant l'import ont été sauvegardées "
-                f"dans « {sauvegarde} »."
-            ),
+            "message": langues.t(
+                "arch.echec_import", titre=titre, message=message, sauvegarde=sauvegarde),
             "sauvegarde": str(sauvegarde),
         }
 
@@ -603,15 +617,13 @@ def importer(chemin: str | Path) -> dict:
 
     return {
         "ok": True,
-        "message": (
-            f"Import terminé : {len(termes_importes)} terme(s) de glossaire, "
-            f"{len(regles_importees)} règle(s) de correction et vos réglages ont été remplacés."
+        "message": langues.t(
+            "arch.import_message",
+            termes=len(termes_importes), regles=len(regles_importees),
         ),
         "sauvegarde": str(sauvegarde),
-        "message_sauvegarde": (
-            f"Vos données d'avant l'import ont été enregistrées dans « {sauvegarde} ». "
-            "Ce fichier se réimporte de la même façon si vous voulez revenir en arrière."
-        ),
+        "message_sauvegarde": langues.t(
+            "arch.message_sauvegarde", chemin=sauvegarde),
         "notes": notes,
         "glossaire": len(termes_importes),
         "corrections": len(regles_importees),

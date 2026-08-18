@@ -2,8 +2,13 @@
 Journalisation.
 
 Deux niveaux volontairement separes :
-  - l'interface recoit des messages courts et lisibles en francais ;
-  - le fichier de log horodate recoit tout le detail technique, tracebacks compris.
+  - l'interface recoit des messages courts et lisibles, DANS LA LANGUE DE
+    L'INTERFACE : `expliquer()` traduit chaque incident via `app/langues.py` ;
+  - le fichier de log horodate recoit tout le detail technique, tracebacks
+    compris, ET RESTE EN FRANCAIS. Choix assume : ce journal s'adresse au
+    mainteneur, pas a l'utilisateur, et sert au diagnostic des incidents
+    rapportes au depot. Le traduire n'aiderait personne et rendrait les traces
+    d'un poste a l'autre incomparables.
 
 Le nom du fichier de log est toujours cite dans le message d'erreur affiche,
 pour que le diagnostic tienne en un clic.
@@ -136,68 +141,42 @@ def expliquer(exc: BaseException, contexte: str = "") -> tuple[str, str]:
 
     On reste factuel et on indique toujours l'action a mener.
     """
+    from . import langues
+
     if isinstance(exc, ErreurLisible):
         return exc.titre, exc.message
 
     texte = f"{type(exc).__name__}: {exc}".lower()
 
+    def couple(prefixe: str) -> tuple[str, str]:
+        return langues.t(prefixe + ".titre"), langues.t(prefixe + ".msg")
+
     if isinstance(exc, MemoryError) or "cannot allocate" in texte or "bad_alloc" in texte:
-        return (
-            "Mémoire insuffisante",
-            "La machine n'a pas assez de mémoire vive pour ce modèle. Essayez le preset "
-            "« Rapide », désactivez la séparation des locuteurs, ou fermez les autres "
-            "applications ouvertes.",
-        )
+        return couple("err.memoire")
 
     if "no space left" in texte or "espace insuffisant" in texte or isinstance(exc, OSError) and getattr(exc, "errno", None) == 28:
-        return (
-            "Disque plein",
-            "Il n'y a plus assez de place sur le disque pour écrire le résultat ou "
-            "télécharger le modèle. Libérez de l'espace puis relancez.",
-        )
+        return couple("err.disque")
 
     if "401" in texte or "gated" in texte or "unauthorized" in texte or "authentication" in texte:
-        return (
-            "Accès au modèle de diarisation refusé",
-            "Le jeton Hugging Face est absent, invalide, ou les conditions du modèle "
-            "pyannote n'ont pas été acceptées. Ouvrez le panneau « Locuteurs » pour "
-            "revoir la procédure. La transcription seule fonctionne sans jeton.",
-        )
+        return couple("err.jeton")
 
     if "connection" in texte or "timed out" in texte or "getaddrinfo" in texte or "max retries" in texte:
-        return (
-            "Téléchargement impossible",
-            "Le modèle n'est pas encore présent sur la machine et le téléchargement a "
-            "échoué. Vérifiez la connexion Internet, puis relancez : une fois téléchargé, "
-            "le modèle reste local et l'application n'a plus besoin du réseau.",
-        )
+        return couple("err.reseau")
 
     if "cudnn" in texte or "cublas" in texte or "cuda" in texte:
-        return (
-            "Accélération NVIDIA indisponible",
-            "Les bibliothèques CUDA (cuBLAS, cuDNN) n'ont pas pu être chargées. "
-            "Relancez l'installateur, ou forcez le mode processeur dans les réglages avancés.",
-        )
+        return couple("err.cuda")
 
     if isinstance(exc, FileNotFoundError):
-        return (
-            "Fichier introuvable",
-            "Le fichier a été déplacé, renommé ou supprimé depuis son ajout à la file.",
-        )
+        return couple("err.fichier")
 
     if isinstance(exc, PermissionError):
-        return (
-            "Accès refusé",
-            "Windows refuse la lecture ou l'écriture de ce fichier. Vérifiez qu'il n'est "
-            "pas ouvert dans une autre application et que le dossier de sortie est "
-            "accessible en écriture.",
-        )
+        return couple("err.acces")
 
-    suffixe = f" ({contexte})" if contexte else ""
-    return (
-        "Échec inattendu" + suffixe,
-        f"Le détail technique est consigné dans logs/{nom_fichier()}.",
+    titre = (
+        langues.t("err.inattendu.titre_contexte", contexte=contexte) if contexte
+        else langues.t("err.inattendu.titre")
     )
+    return titre, langues.t("err.inattendu.msg", journal=nom_fichier())
 
 
 def formater_incident(exc: BaseException, contexte: str = "") -> dict:

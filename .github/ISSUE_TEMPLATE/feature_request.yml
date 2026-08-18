@@ -1,0 +1,46 @@
+name: Feature request
+description: Suggest something the application should do.
+title: "[Idea] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        WhiScribe is a small, focused tool: transcribe local audio well, on the machine,
+        without an account. Ideas that keep it that way have the best chance.
+        The [known limits](https://github.com/BurN-30/whiscribe#known-limits) section of the
+        README lists what is deliberately out of scope.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: The situation first, the solution after. A concrete use case helps more than a feature name.
+      placeholder: "I record interviews on a dictaphone and I have to ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like the application to do
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today instead
+      description: Workaround, other tool, manual step.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      options:
+        - label: This works without sending anything off the machine.
+          required: false
+        - label: This does not require a new heavy dependency (an extra gigabyte or more).
+          required: false

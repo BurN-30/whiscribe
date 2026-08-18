@@ -10,18 +10,28 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 
-from . import chemins, journal
+from . import chemins, journal, langues
 from .presets import PRESET_DEFAUT
 
 DEFAUTS: dict = {
     "preset": PRESET_DEFAUT,
-    "langue": "fr",
+    "langue": "fr",                 # langue PARLÉE, pour le moteur
+    "langue_interface": "",         # langue de l'INTERFACE, vide = à détecter
     "dossier_sortie": "",
     "diarisation": True,
     "nb_locuteurs": 0,              # 0 = détection automatique
     "formats": {"txt": True, "srt": False, "vtt": False, "horodatage": False},
     "appliquer_corrections": True,
     "utiliser_glossaire": True,
+    "compagnon_confiance": True,    # fichier .json de confiance à côté des sorties
+    "corrections_apprises": True,   # proposer de mémoriser une correction relue
+    "sauvegarde_progressive": True, # écrire au fil des segments, reprise possible
+    "lecture_audio": False,         # écouter l'extrait depuis la vue de lecture
+    "motif_sortie": "",             # vide = nommage historique, « {date}-{nom} »
+    "dossier_surveille": "",        # dossier scruté quand la surveillance est active
+    "surveillance": False,          # opt-in, voir app/surveillance.py
+    "maj_verifier": False,          # opt-in, SEUL appel réseau hors modèles
+    "barre_taches": True,           # progression dans la barre des tâches Windows
     "filtres_salle": False,
     "mode_avance": False,
     "modele_avance": "",            # vide = modèle du preset
@@ -60,6 +70,16 @@ def charger() -> dict:
     if not config["dossier_sortie"]:
         config["dossier_sortie"] = str(chemins.dossier_sortie_defaut())
 
+    # Langue de l'interface. Au tout premier lancement elle suit la langue du
+    # système, puis elle est écrite dans la configuration et ne bouge plus que
+    # si l'utilisateur la change. Elle est SANS RAPPORT avec « langue », qui
+    # désigne la langue parlée dans les enregistrements.
+    if not langues.normaliser(config.get("langue_interface")):
+        config["langue_interface"] = langues.detecter_systeme()
+        journal.info("Langue d'interface détectée : %s", config["langue_interface"])
+        sauver(config)
+    langues.definir(config["langue_interface"])
+
     # Le dossier des modèles n'est pas rangé ici : il est partagé avec le
     # programme d'installation et le désinstallateur, voir `app/chemins.py`.
     return config
@@ -89,9 +109,14 @@ def reglages_effectifs(config: dict) -> dict:
     beam = (config.get("beam_size") or p["beam_size"]) if avance else p["beam_size"]
     personnalise = avance and (modele != p["modele"] or beam != p["beam_size"])
 
+    from .presets import nom_preset
+
     return {
         "preset": p["cle"],
-        "preset_nom": f"{p['nom']}, réglages personnalisés" if personnalise else p["nom"],
+        "preset_nom": (
+            langues.t("preset.personnalise", nom=nom_preset(p["cle"]))
+            if personnalise else nom_preset(p["cle"])
+        ),
         "modele": modele,
         "beam_size": beam,
         "best_of": p["best_of"],

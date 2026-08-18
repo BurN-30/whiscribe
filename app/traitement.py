@@ -22,7 +22,8 @@ from typing import Callable
 
 from . import audio as audio_module
 from . import config as config_module
-from . import diarisation, journal, moteur, presets, sorties, vocabulaire
+from . import diarisation, journal, langues, moteur, presets, reprise as reprise_module
+from . import sorties, vocabulaire
 from .journal import ErreurLisible
 from .materiel import Materiel
 
@@ -37,6 +38,8 @@ class Element:
     taille: int = 0
     duree: float = 0.0
     etat: str = "attente"
+    #: Clé de reprise quand ce fichier a été remis en file après une interruption.
+    reprise: str = ""
 
     def en_dict(self) -> dict:
         return {
@@ -47,6 +50,7 @@ class Element:
             "duree_secs": round(self.duree, 1),
             "duree": presets.formater_duree(self.duree) if self.duree else "--",
             "etat": self.etat,
+            "reprise": bool(self.reprise),
         }
 
 
@@ -69,6 +73,8 @@ class FileTraitement:
         self._arret = threading.Event()
         self._fil: threading.Thread | None = None
         self._en_cours = False
+        #: Sauvegarde progressive du fichier en cours, fermée quoi qu'il arrive.
+        self._session = reprise_module.session_inactive()
 
     # -- gestion de la file -------------------------------------------------
 
@@ -102,6 +108,33 @@ class FileTraitement:
                 deja.add(str(fichier).lower())
                 ajoutes.append(element.en_dict())
         return ajoutes
+
+    def ajouter_pour_reprise(self, chemin: str, cle_reprise: str) -> dict | None:
+        """
+        Remet en file un fichier dont la transcription avait été interrompue.
+
+        Le fichier peut déjà être dans la file, auquel cas on se contente de lui
+        attacher la reprise plutôt que de créer un doublon.
+        """
+        fichier = Path(chemin or "")
+        if not fichier.is_file():
+            return None
+        with self._verrou:
+            for element in self.elements:
+                if element.chemin.lower() == str(fichier).lower():
+                    if element.etat == "attente":
+                        element.reprise = cle_reprise
+                        return element.en_dict()
+                    return None
+        ajoutes = self.ajouter([str(fichier)])
+        if not ajoutes:
+            return None
+        with self._verrou:
+            for element in self.elements:
+                if element.identifiant == ajoutes[0]["id"]:
+                    element.reprise = cle_reprise
+                    return element.en_dict()
+        return None
 
     def retirer(self, identifiant: str) -> None:
         with self._verrou:
@@ -165,7 +198,7 @@ class FileTraitement:
                 if self._interrompu():
                     element.etat = "annule"
                     annules += 1
-                    rappels.etat(element.identifiant, "annule", "Annulé")
+                    rappels.etat(element.identifiant, "annule", langues.t("etat.annule"))
                     continue
                 try:
                     self._traiter(element, config, reglages, instance, rappels)
@@ -173,7 +206,7 @@ class FileTraitement:
                 except moteur.Interruption:
                     element.etat = "annule"
                     annules += 1
-                    rappels.etat(element.identifiant, "annule", "Arrêté")
+                    rappels.etat(element.identifiant, "annule", langues.t("etat.arrete"))
                     rappels.termine(element.identifiant, {"ok": False, "annule": True})
                 except Exception as exc:
                     echoues += 1
@@ -183,6 +216,9 @@ class FileTraitement:
                     rappels.journal_ui("erreur", f"{element.nom} : {incident['titre']}")
                     rappels.termine(element.identifiant, {"ok": False, **incident})
                 finally:
+                    # Un fichier interrompu garde sa reprise, seul un succès
+                    # l'efface : c'est tout l'intérêt de la sauvegarde.
+                    self._session.fermer()
                     instance.liberer()
                     gc.collect()
         finally:
@@ -210,14 +246,55 @@ class FileTraitement:
 
         # 1. Décodage
         element.etat = "decodage"
-        rappels.etat(element.identifiant, "decodage", "Lecture du fichier")
+        rappels.etat(element.identifiant, "decodage", langues.t("etat.lecture"))
         signal = audio_module.decoder(source, filtres_salle=reglages["filtres_salle"])
         duree_audio = signal.size / audio_module.FREQUENCE
         element.duree = duree_audio
-        signaler("info", f"{element.nom} : {presets.formater_duree(duree_audio)} d'audio")
+        signaler("info", langues.t(
+            "trait.duree_audio", nom=element.nom,
+            duree=presets.formater_duree(duree_audio)))
 
         if self._interrompu():
             raise moteur.Interruption()
+
+        # 1 bis. Sauvegarde progressive et reprise éventuelle.
+        #
+        # Le moteur livre déjà les segments un par un : les écrire au fil de
+        # l'eau ne coûte qu'une ligne de texte par segment. En contrepartie, une
+        # coupure ne fait plus perdre le calcul déjà fait, et le temps écoulé
+        # est conservé pour que le compteur reparte où il s'était arrêté.
+        session = self._session = reprise_module.session_inactive()
+        deja_transcrits: list[moteur.Segment] = []
+        decalage = 0.0
+        ecoule_anterieur = 0.0
+
+        if element.reprise:
+            etat_reprise = reprise_module.lire_etat(element.reprise) or {}
+            deja_transcrits = reprise_module.lire_segments(element.reprise)
+            if deja_transcrits:
+                decalage = deja_transcrits[-1].fin
+                ecoule_anterieur = float(etat_reprise.get("ecoule", 0) or 0)
+                depart -= ecoule_anterieur
+                signal = signal[int(decalage * audio_module.FREQUENCE):]
+                signaler("info", langues.t(
+                    "trait.reprise", nom=element.nom,
+                    position=presets.formater_duree(decalage),
+                    segments=len(deja_transcrits),
+                    ecoule=presets.formater_duree(ecoule_anterieur),
+                ))
+
+        if config.get("sauvegarde_progressive", True):
+            identifiant = element.reprise or reprise_module.cle(source, reglages["modele"])
+            session = self._session = reprise_module.Session(identifiant, active=True)
+            session.ouvrir(
+                source, reglages["modele"], duree_audio,
+                position=decalage, nb_segments=len(deja_transcrits),
+                ecoule=ecoule_anterieur,
+            )
+        elif element.reprise:
+            # Reprise demandée mais sauvegarde coupée depuis : le travail déjà
+            # fait est réutilisé, simplement plus rien de nouveau n'est protégé.
+            signaler("attention", langues.t("trait.sauvegarde_coupee"))
 
         # 2. Transcription
         element.etat = "transcription"
@@ -228,17 +305,20 @@ class FileTraitement:
             diarisation=bool(config.get("diarisation")),
             modele_avance=reglages["modele"] if config.get("mode_avance") else "",
         )
-        rappels.etat(element.identifiant, "transcription", "Transcription")
+        rappels.etat(element.identifiant, "transcription", langues.t("etat.transcription"))
 
         instance.charger(reglages["modele"], signaler)
 
         amorce_info = {"amorce": "", "nb_retenus": 0, "message": ""}
         if config.get("utiliser_glossaire", True):
-            amorce_info = vocabulaire.construire_amorce(tokeniseur=instance.tokeniseur)
+            # L'en-tête de l'amorce suit la langue parlée : elle est lue par le
+            # décodeur comme un début de texte, pas comme une consigne.
+            amorce_info = vocabulaire.construire_amorce(
+                tokeniseur=instance.tokeniseur, langue=config.get("langue", "fr"))
             if amorce_info["amorce"]:
                 signaler("info", amorce_info["message"])
                 if amorce_info["tronque"]:
-                    signaler("attention", "Glossaire tronqué pour tenir dans l'amorce du modèle.")
+                    signaler("attention", langues.t("trait.glossaire_tronque"))
 
         def progression(part: float) -> None:
             ecoule = time.time() - depart
@@ -247,16 +327,22 @@ class FileTraitement:
             restant = max(0.0, estimation - ecoule)
             rappels.progression(element.identifiant, {
                 "pct": min(99, pourcent),
-                "phase": "Transcription",
+                "phase": langues.t("phase.transcription"),
                 "ecoule": presets.formater_duree(ecoule),
-                "restant": presets.formater_duree(restant) if restant > 5 else "bientôt",
+                "restant": (
+                    presets.formater_duree(restant) if restant > 5
+                    else langues.t("phase.bientot")
+                ),
             })
 
         segments, details = instance.transcrire(
             signal, duree_audio, config.get("langue", "fr"), reglages,
             amorce=amorce_info["amorce"], progression=progression,
-            interrompu=self._interrompu,
+            interrompu=self._interrompu, decalage=decalage,
+            sur_segment=lambda seg: session.ajouter(seg, time.time() - depart),
         )
+        segments = deja_transcrits + segments
+        session.fermer()
 
         # 3. Libération AVANT la diarisation : c'est ce qui tient les 16 Go.
         instance.liberer()
@@ -265,9 +351,9 @@ class FileTraitement:
         nb_locuteurs = 0
         if config.get("diarisation") and segments:
             element.etat = "locuteurs"
-            rappels.etat(element.identifiant, "locuteurs", "Séparation des locuteurs")
+            rappels.etat(element.identifiant, "locuteurs", langues.t("etat.locuteurs"))
             rappels.progression(element.identifiant, {
-                "pct": 88, "phase": "Locuteurs",
+                "pct": 88, "phase": langues.t("phase.locuteurs"),
                 "ecoule": presets.formater_duree(time.time() - depart), "restant": "",
             })
             try:
@@ -277,13 +363,15 @@ class FileTraitement:
                     signaler=signaler, interrompu=self._interrompu,
                 )
                 nb_locuteurs = diarisation.attribuer(segments, tours)
-                signaler("ok", f"{nb_locuteurs} locuteurs identifiés.")
+                signaler("ok", langues.t("trait.locuteurs_identifies", n=nb_locuteurs))
             except ErreurLisible as exc:
                 journal.attention("Diarisation abandonnée : %s", exc.message)
-                signaler("attention", f"{exc.titre} : {exc.message} La transcription continue sans étiquettes.")
+                signaler("attention", langues.t(
+                    "trait.diar_abandonnee", titre=exc.titre, message=exc.message))
             except Exception as exc:
                 incident = journal.formater_incident(exc, "diarisation")
-                signaler("attention", f"{incident['titre']} : la transcription continue sans étiquettes.")
+                signaler("attention", langues.t(
+                    "trait.diar_incident", titre=incident["titre"]))
 
         del signal
         gc.collect()
@@ -293,20 +381,21 @@ class FileTraitement:
         if config.get("appliquer_corrections", True):
             regles, erreurs = vocabulaire.analyser_corrections()
             for message in erreurs:
-                signaler("attention", f"corrections.txt : {message}")
+                signaler("attention", langues.t("trait.corrections_fichier", message=message))
             if regles:
                 for segment in segments:
                     segment.texte, nombre = vocabulaire.appliquer(segment.texte, regles)
                     remplacements += nombre
                 if remplacements:
-                    signaler("ok", f"{remplacements} corrections automatiques appliquées.")
+                    signaler("ok", langues.t(
+                        "trait.corrections_appliquees", n=remplacements))
 
         if self._interrompu():
             raise moteur.Interruption()
 
         # 6. Écriture
         element.etat = "ecriture"
-        rappels.etat(element.identifiant, "ecriture", "Écriture des fichiers")
+        rappels.etat(element.identifiant, "ecriture", langues.t("etat.ecriture"))
         temps_calcul = time.time() - depart
         details.update({
             "modele_lisible": moteur.nom_court(reglages["modele"]),
@@ -323,26 +412,31 @@ class FileTraitement:
         libre = journal.espace_disque_libre(dossier if dossier.exists() else dossier.parent)
         if 0 <= libre < 50 * 1024 * 1024:
             raise ErreurLisible(
-                "Disque plein",
-                f"Il reste moins de 50 Mo sur le disque de destination. Libérez de "
-                "l'espace puis relancez.",
+                langues.t("err.disque.titre"),
+                langues.t("trait.disque_plein.msg"),
             )
 
         produits = sorties.ecrire_tout(
-            dossier, source, segments, details, config.get("formats", {"txt": True})
+            dossier, source, segments, details, config.get("formats", {"txt": True}),
+            avec_compagnon=bool(config.get("compagnon_confiance", True)),
+            motif=str(config.get("motif_sortie") or ""),
         )
+
+        # Le fichier est écrit : la reprise n'a plus lieu d'être.
+        session.effacer()
+        element.reprise = ""
 
         element.etat = "termine"
         rappels.progression(element.identifiant, {
-            "pct": 100, "phase": "Terminé",
+            "pct": 100, "phase": langues.t("phase.termine"),
             "ecoule": presets.formater_duree(temps_calcul), "restant": "",
         })
-        rappels.etat(element.identifiant, "termine", "Terminé")
-        rappels.journal_ui(
-            "ok",
-            f"{element.nom} transcrit en {presets.formater_duree(temps_calcul)} "
-            f"({details['facteur_reel']:.2f} x la durée de l'audio).",
-        )
+        rappels.etat(element.identifiant, "termine", langues.t("etat.termine"))
+        rappels.journal_ui("ok", langues.t(
+            "trait.termine", nom=element.nom,
+            duree=presets.formater_duree(temps_calcul),
+            facteur=langues.nombre(details["facteur_reel"], 2),
+        ))
         rappels.termine(element.identifiant, {
             "ok": True,
             "sorties": produits,

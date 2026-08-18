@@ -1,5 +1,5 @@
 """
-WhiScribe — point d'entrée.
+WhiScribe : point d'entrée.
 
 Fenêtre pywebview, interface web dans `web/`, moteur faster-whisper.
 Tout se passe sur la machine : aucun envoi vers un service en ligne.
@@ -29,7 +29,7 @@ if not getattr(sys, "frozen", False):
     if str(RACINE) not in sys.path:
         sys.path.insert(0, str(RACINE))
 
-from app import VERSION, NOM_APPLICATION, chemins, journal  # noqa: E402
+from app import VERSION, NOM_APPLICATION, chemins, journal, langues  # noqa: E402
 
 journal.demarrer()
 journal.purger()
@@ -194,15 +194,14 @@ _manquants = _dependances_manquantes()
 if _manquants:
     _abandonner(
         NOM_APPLICATION,
-        "Il manque des composants pour démarrer :\n\n  "
+        langues.t("app.dependances.titre")
+        + "\n\n  "
         + "\n  ".join(_manquants)
+        + "\n\n"
         + (
-            "\n\nL'installation est incomplète ou abîmée. Réinstallez "
-            "l'application depuis son programme d'installation."
-            if chemins.EST_GELE else
-            "\n\nLancez « installer.bat » à côté de l'application, il pose tout "
-            "automatiquement. Installation manuelle :\n\n  pip install "
-            + " ".join(_manquants)
+            langues.t("app.dependances.installee") if chemins.EST_GELE else
+            langues.t("app.dependances.sources")
+            + "\n\n  pip install " + " ".join(_manquants)
         ),
     )
 
@@ -211,7 +210,9 @@ from webview.dom import DOMEventHandler  # noqa: E402
 
 from app import audio as audio_module  # noqa: E402
 from app import config as config_module  # noqa: E402
-from app import diarisation, donnees, materiel, presets, traitement, vocabulaire  # noqa: E402
+from app import barre_taches, diarisation, donnees, gabarit, lecture, maj  # noqa: E402
+from app import materiel, nommage, presets, reprise, stockage  # noqa: E402
+from app import surveillance, traitement, vocabulaire  # noqa: E402
 
 _SANS_FENETRE = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
@@ -235,6 +236,11 @@ class Passerelle:
             journal_ui=self._sur_journal,
             file_terminee=self._sur_file_terminee,
         )
+        #: Dossier surveillé. Le fil ne démarre que si l'option est active.
+        self.surveillant = surveillance.Surveillant(
+            sur_nouveaux=self._sur_fichiers_surveilles,
+            signaler=self._sur_etat_surveillance,
+        )
 
     # -- utilitaires -------------------------------------------------------
 
@@ -255,6 +261,8 @@ class Passerelle:
 
     def _sur_progression(self, identifiant: str, donnees: dict) -> None:
         self._js(f"onProgression({_json(identifiant)}, {_json(donnees)})")
+        if self.config.get("barre_taches", True):
+            barre_taches.progression(int(donnees.get("pct") or 0))
 
     def _sur_fichier_termine(self, identifiant: str, donnees: dict) -> None:
         self._js(f"onFichierTermine({_json(identifiant)}, {_json(donnees)})")
@@ -266,12 +274,46 @@ class Passerelle:
 
     def _sur_file_terminee(self, donnees: dict) -> None:
         self._js(f"onFileTerminee({_json(donnees)})")
+        self._clore_barre_taches(bool(donnees.get("echecs")))
+
+    def _clore_barre_taches(self, en_echec: bool) -> None:
+        """
+        Fin de file : la barre disparaît. Un échec la laisse rouge quelques
+        secondes, le temps d'être vue, puis elle s'efface comme le reste.
+        """
+        if not self.config.get("barre_taches", True):
+            return
+        if not en_echec:
+            barre_taches.effacer()
+            return
+        barre_taches.erreur()
+        threading.Timer(4.0, barre_taches.effacer).start()
+
+    def _sur_etat_surveillance(self, niveau: str, texte: str) -> None:
+        """
+        Le dossier surveillé change d'état : dit dans le journal, et reflété
+        par l'indicateur discret de l'en-tête.
+        """
+        self._sur_journal(niveau, texte)
+        self._js(f"onSurveillance({_json(self.surveillant.etat())})")
+
+    def _sur_fichiers_surveilles(self, chemins_trouves: list[str]) -> None:
+        """Fichiers apparus dans le dossier surveillé, ajoutés à la file."""
+        ajoutes = self.file.ajouter(list(chemins_trouves))
+        if not ajoutes:
+            return
+        self._js(f"onFichiersAjoutes({_json(ajoutes)})")
+        self._sur_journal("info", langues.tn("app.veille.ajoutes", len(ajoutes)))
+        self.file.mesurer_durees(
+            lambda identifiant, secondes, texte:
+            self._js(f"onDuree({_json(identifiant)}, {secondes}, {_json(texte)})")
+        )
 
     # -- état initial ------------------------------------------------------
 
     def etat_initial(self) -> dict:
         chemins.assurer_dossiers()
-        glossaire = vocabulaire.resume_glossaire()
+        glossaire = vocabulaire.resume_glossaire(self.config.get("langue", "fr"))
         manque_diarisation = diarisation.indisponibilite()
 
         return {
@@ -283,10 +325,10 @@ class Passerelle:
             "presets": [
                 {
                     "cle": p["cle"],
-                    "nom": p["nom"],
-                    "resume": p["resume"],
+                    "nom": presets.nom_preset(p["cle"]),
+                    "resume": presets.resume_preset(p["cle"]),
                     "modele": moteur_nom_court(p["modele"]),
-                    "telechargement": f"{p['telechargement_go']:.1f} Go".replace(".", ","),
+                    "telechargement": langues.octets(p["telechargement_go"] * 1024 ** 3),
                     "facteur": presets.facteur_temps_reel(p["cle"], self.materiel),
                     "pour_une_heure": presets.formater_duree(
                         presets.estimer_secondes(3600, p["cle"], self.materiel)
@@ -294,7 +336,8 @@ class Passerelle:
                 }
                 for p in presets.PRESETS.values()
             ],
-            "modeles_avances": presets.MODELES_AVANCES,
+            "modeles_avances": presets.modeles_avances(),
+            "langues_interface": langues.liste_langues(),
             "glossaire": {
                 "contenu": vocabulaire.lire_glossaire(),
                 "resume": glossaire,
@@ -309,6 +352,12 @@ class Passerelle:
                 "indisponibilite": manque_diarisation,
                 "jeton_present": diarisation.jeton_present(),
                 "guide": diarisation.guide(),
+            },
+            "reprises": self._reprises(),
+            "surveillance": self.surveillant.etat(),
+            "nommage": {
+                "defaut": nommage.MOTIF_DEFAUT,
+                "variables": [{"cle": c, "role": r} for c, r in nommage.VARIABLES],
             },
             "ffmpeg": audio_module.ffmpeg_present(),
             "journal": journal.nom_fichier(),
@@ -348,13 +397,11 @@ class Passerelle:
                 return ""
         except Exception:
             return ""
-        taille = moteur.taille_annoncee(modele)
-        return (
-            f"Le modèle « {moteur.nom_court(modele)} » n'est pas encore sur cette machine. "
-            f"Il sera téléchargé une seule fois au lancement de la première transcription, "
-            f"environ {taille}, dans « {chemins.DOSSIER_MODELES} ». Une connexion Internet "
-            "est nécessaire pour cette étape, et pour elle seulement : ensuite l'application "
-            "fonctionne entièrement hors ligne."
+        return langues.t(
+            "app.telechargement_annonce",
+            modele=moteur.nom_court(modele),
+            taille=moteur.taille_annoncee(modele),
+            dossier=chemins.DOSSIER_MODELES,
         )
 
     # -- dossier des modèles ------------------------------------------------
@@ -372,9 +419,9 @@ class Passerelle:
                 present = False
             etat_presets.append({
                 "cle": p["cle"],
-                "nom": p["nom"],
+                "nom": presets.nom_preset(p["cle"]),
                 "modele": moteur.nom_court(p["modele"]),
-                "taille": f"{p['telechargement_go']:.1f} Go".replace(".", ","),
+                "taille": langues.octets(p["telechargement_go"] * 1024 ** 3),
                 "present": present,
             })
 
@@ -382,8 +429,8 @@ class Passerelle:
             "dossier": str(dossier),
             "defaut": str(chemins.dossier_modeles_defaut()),
             "personnalise": chemins.FICHIER_CHOIX_MODELES.exists(),
-            "occupe": presets.nombre_fr(chemins.taille_dossier_go(dossier)) + " Go",
-            "libre": presets.nombre_fr(chemins.espace_libre_go(dossier)) + " Go",
+            "occupe": langues.octets(chemins.taille_dossier_go(dossier) * 1024 ** 3),
+            "libre": langues.octets(chemins.espace_libre_go(dossier) * 1024 ** 3),
             "presets": etat_presets,
         }
 
@@ -421,12 +468,9 @@ class Passerelle:
         chemins.assurer_dossiers()
         journal.info("Dossier des modèles : %s (était %s)", nouveau, ancien)
 
-        message = f"Les modèles seront rangés dans « {nouveau} »."
+        message = langues.t("app.modeles.range", dossier=nouveau)
         if str(nouveau) != ancien and chemins.taille_dossier_go(ancien) > 0.05:
-            message += (
-                f" L'ancien dossier « {ancien} » n'a pas été touché, vous pouvez le "
-                "supprimer si vous n'en avez plus besoin."
-            )
+            message += langues.t("app.modeles.ancien", ancien=ancien)
         return {
             "ok": True,
             "message": message,
@@ -438,6 +482,143 @@ class Passerelle:
         chemins.assurer_dossiers()
         self.ouvrir(str(chemins.DOSSIER_MODELES))
 
+    # -- espace occupé ------------------------------------------------------
+
+    def mesurer_stockage(self) -> None:
+        """
+        Mesure l'espace occupé en tâche de fond.
+
+        Un dossier de modèles de trois gigaoctets se parcourt en centaines de
+        milliers d'appels système : le faire dans le fil de l'interface figerait
+        la fenêtre. Le résultat arrive par `onStockage`.
+        """
+        def travail() -> None:
+            try:
+                mesure = stockage.mesurer()
+            except Exception as exc:
+                journal.exception("Mesure de l'espace occupé en échec", exc)
+                mesure = {"postes": [], "total_texte": "--", "erreur": True}
+            self._js(f"onStockage({_json(mesure)})")
+
+        self._fond(travail)
+
+    # -- nom des fichiers produits -----------------------------------------
+
+    def apercu_motif(self, motif: str) -> dict:
+        """Aperçu en direct sous le champ des réglages."""
+        return nommage.apercu(motif or "")
+
+    def enregistrer_motif(self, motif: str) -> dict:
+        """
+        Enregistre le motif de nommage après validation.
+
+        Un motif refusé n'est pas écrit : l'ancien réglage reste en place, et le
+        message dit pourquoi.
+        """
+        texte = (motif or "").strip()
+        probleme = nommage.valider(texte)
+        if probleme:
+            return {"ok": False, "message": probleme, "motif": self.config.get("motif_sortie", "")}
+        self.config["motif_sortie"] = texte
+        config_module.sauver(self.config)
+        journal.info("Nom des fichiers produits : %s", texte or nommage.MOTIF_DEFAUT)
+        return {
+            "ok": True,
+            "motif": texte,
+            "apercu": nommage.apercu(texte),
+            "message": langues.t(
+                "app.motif.defaut" if not texte else "app.motif.enregistre"),
+        }
+
+    # -- dossier surveillé --------------------------------------------------
+
+    def configurer_surveillance(self, dossier: str, actif: bool) -> dict:
+        """Applique le réglage du dossier surveillé et l'enregistre."""
+        chemin = (dossier or "").strip()
+        actif = bool(actif)
+        if actif and not chemin:
+            return {
+                **self.surveillant.etat(),
+                "ok": False,
+                "message": langues.t("app.veille.choisir"),
+            }
+        if actif and not Path(chemin).expanduser().is_dir():
+            return {
+                **self.surveillant.etat(),
+                "ok": False,
+                "message": langues.t("app.veille.pas_accessible", chemin=chemin),
+            }
+
+        self.config["dossier_surveille"] = chemin
+        self.config["surveillance"] = actif
+        config_module.sauver(self.config)
+        etat = self.surveillant.configurer(chemin, actif)
+        journal.info("Surveillance %s : %s", "active" if actif else "coupée", chemin or "--")
+        return {
+            **etat,
+            "ok": True,
+            "message": (
+                langues.t("app.veille.active", chemin=chemin) if actif
+                else langues.t("app.veille.coupee")
+            ),
+        }
+
+    def choisir_dossier_surveille(self) -> None:
+        self._fond(self._dialogue_dossier_surveille)
+
+    def _dialogue_dossier_surveille(self) -> None:
+        try:
+            resultat = self._fenetre.create_file_dialog(
+                webview.FOLDER_DIALOG,
+                directory=self.config.get("dossier_surveille", "") or str(Path.home()),
+            )
+        except Exception as exc:
+            journal.exception("Ouverture du sélecteur de dossier impossible", exc)
+            resultat = None
+        if not resultat:
+            # Sélection annulée : l'interface doit le savoir pour ne pas laisser
+            # une bascule allumée sur un dossier qui n'existe pas.
+            self._js('onDossierSurveille("")')
+            return
+        chemin = resultat[0] if isinstance(resultat, (list, tuple)) else resultat
+        self._js(f"onDossierSurveille({_json(str(chemin))})")
+
+    def oublier_fichiers_surveilles(self) -> dict:
+        """Vide la mémoire : tout le contenu du dossier repartira en file."""
+        etat = self.surveillant.oublier_tout()
+        journal.info("Mémoire du dossier surveillé vidée.")
+        return {
+            **etat,
+            "ok": True,
+            "message": langues.t("app.veille.memoire_videe"),
+        }
+
+    def ouvrir_dossier_surveille(self) -> None:
+        self.ouvrir(self.config.get("dossier_surveille", ""))
+
+    # -- vérification de mise à jour ---------------------------------------
+
+    def verifier_maj(self, forcer: bool = False) -> None:
+        """
+        Interroge les Releases du dépôt, uniquement si l'option est active.
+
+        C'est ici, et nulle part ailleurs, que se garantit la promesse : option
+        coupée, aucun appel réseau sortant n'est émis par l'application.
+        """
+        if not self.config.get("maj_verifier"):
+            return
+
+        def travail() -> None:
+            try:
+                resultat = maj.verifier(VERSION, forcer=bool(forcer))
+            except Exception as exc:
+                journal.exception("Vérification de mise à jour en échec", exc)
+                return
+            if resultat.get("disponible"):
+                self._js(f"onMiseAJour({_json(resultat)})")
+
+        self._fond(travail)
+
     # -- réglages ----------------------------------------------------------
 
     def sauver_config(self, partiel: dict) -> dict:
@@ -448,6 +629,12 @@ class Passerelle:
                 self.config[cle].update(valeur)
             else:
                 self.config[cle] = valeur
+        # La langue d'interface prend effet tout de suite, y compris pour les
+        # textes que Python fabrique : l'interface redemande son état juste après.
+        if "langue_interface" in (partiel or {}):
+            retenue = langues.definir(self.config.get("langue_interface"))
+            self.config["langue_interface"] = retenue
+            journal.info("Langue d'interface : %s", retenue)
         config_module.sauver(self.config)
         return {
             "config": self.config,
@@ -456,7 +643,8 @@ class Passerelle:
 
     def sauver_glossaire(self, contenu: str) -> dict:
         vocabulaire.ecrire_glossaire(contenu or "")
-        resume = vocabulaire.construire_amorce(contenu or "")
+        resume = vocabulaire.construire_amorce(
+            contenu or "", langue=self.config.get("langue", "fr"))
         journal.info("Glossaire enregistré : %s termes", resume["nb_termes"])
         return resume
 
@@ -469,17 +657,11 @@ class Passerelle:
     def enregistrer_jeton(self, valeur: str) -> dict:
         valeur = (valeur or "").strip()
         if valeur and not valeur.startswith("hf_"):
-            return {
-                "ok": False,
-                "message": "Un jeton Hugging Face commence par « hf_ ». Vérifiez le copier-coller.",
-            }
+            return {"ok": False, "message": langues.t("app.jeton.prefixe")}
         diarisation.enregistrer_jeton(valeur)
         if not valeur:
-            return {"ok": True, "message": "Jeton effacé."}
-        return {
-            "ok": True,
-            "message": "Jeton enregistré. Il sera vérifié au premier usage de la séparation des locuteurs.",
-        }
+            return {"ok": True, "message": langues.t("app.jeton.efface")}
+        return {"ok": True, "message": langues.t("app.jeton.enregistre")}
 
     # -- import et export des données personnelles -------------------------
 
@@ -500,14 +682,11 @@ class Passerelle:
                 webview.SAVE_DIALOG,
                 directory=self._dossier_de_depart(),
                 save_filename=donnees.nom_export_propose(),
-                file_types=("Archive de données WhiScribe (*.zip)",),
+                file_types=(langues.t("arch.type"),),
             )
         except Exception as exc:
             journal.exception("Ouverture de la boîte d'enregistrement impossible", exc)
-            refus = {
-                "ok": False,
-                "message": "La fenêtre d'enregistrement n'a pas pu s'ouvrir.",
-            }
+            refus = {"ok": False, "message": langues.t("app.export.fenetre")}
             self._js(f"onExportDonnees({_json(refus)})")
             return
         if not resultat:
@@ -523,7 +702,7 @@ class Passerelle:
             resultat = self._fenetre.create_file_dialog(
                 webview.OPEN_DIALOG,
                 directory=self._dossier_de_depart(),
-                file_types=("Archive de données WhiScribe (*.zip)", "Tous les fichiers (*.*)"),
+                file_types=(langues.t("arch.type"), langues.t("arch.tous_fichiers")),
             )
         except Exception as exc:
             journal.exception("Ouverture du sélecteur de fichiers impossible", exc)
@@ -561,7 +740,8 @@ class Passerelle:
         try:
             resultat = self._fenetre.create_file_dialog(
                 webview.OPEN_DIALOG, allow_multiple=True,
-                file_types=(f"Fichiers audio et vidéo ({extensions})", "Tous les fichiers (*.*)"),
+                file_types=(langues.t("app.dialogue.audio", extensions=extensions),
+                            langues.t("arch.tous_fichiers")),
             )
         except Exception as exc:
             journal.exception("Ouverture du sélecteur de fichiers impossible", exc)
@@ -569,17 +749,48 @@ class Passerelle:
         if resultat:
             self._enregistrer_fichiers(list(resultat))
 
+    def _enregistrer_depot(self, liste: list[str]) -> None:
+        """
+        Trie ce qui vient d'être déposé sur la fenêtre.
+
+        Trois cas, dans cet ordre : une archive d'export WhiScribe seule propose
+        l'import, un dossier livre ses fichiers audio de premier niveau, et tout
+        le reste part dans la file comme avant.
+        """
+        chemins_deposes = [str(c) for c in liste if c]
+        if not chemins_deposes:
+            return
+
+        if len(chemins_deposes) == 1 and chemins_deposes[0].lower().endswith(".zip"):
+            self._js(f"onApercuImport({_json(donnees.analyser(chemins_deposes[0]))})")
+            return
+
+        fichiers: list[str] = []
+        ignores = 0
+        for brut in chemins_deposes:
+            cible = Path(brut)
+            if cible.is_dir():
+                retenus, ecartes = audio_module.lister_dossier(cible)
+                fichiers += retenus
+                ignores += ecartes
+                self._sur_journal(
+                    "info" if retenus else "attention",
+                    langues.t("app.depot.dossier", nom=cible.name, retenus=len(retenus))
+                    + (langues.t("app.depot.ignores", n=ecartes) if ecartes else "")
+                    + langues.t("app.depot.sous_dossiers"),
+                )
+            else:
+                fichiers.append(brut)
+
+        self._enregistrer_fichiers(fichiers)
+
     def _enregistrer_fichiers(self, liste: list[str]) -> None:
         ajoutes = self.file.ajouter(liste)
         if not ajoutes:
-            self._sur_journal("attention", "Aucun fichier audio exploitable dans ce dépôt.")
+            self._sur_journal("attention", langues.t("app.depot.aucun"))
             return
         self._js(f"onFichiersAjoutes({_json(ajoutes)})")
-        self._sur_journal(
-            "info",
-            f"{len(ajoutes)} fichier{'s' if len(ajoutes) > 1 else ''} ajouté"
-            f"{'s' if len(ajoutes) > 1 else ''} à la file.",
-        )
+        self._sur_journal("info", langues.tn("app.ajoutes", len(ajoutes)))
         self.file.mesurer_durees(
             lambda identifiant, secondes, texte:
             self._js(f"onDuree({_json(identifiant)}, {secondes}, {_json(texte)})")
@@ -614,16 +825,13 @@ class Passerelle:
 
     def demarrer(self) -> dict:
         if self.file.occupee:
-            return {"ok": False, "message": "Une transcription est déjà en cours."}
+            return {"ok": False, "message": langues.t("app.demarrer.en_cours")}
         if not audio_module.ffmpeg_present():
             return {
                 "ok": False,
-                "message": (
-                    "Le décodeur audio FFmpeg est introuvable. "
-                    + ("Réinstallez l'application depuis son programme d'installation."
-                       if chemins.EST_GELE
-                       else "Relancez « installer.bat » pour le poser.")
-                ),
+                "message": langues.t(
+                    "app.demarrer.ffmpeg_installee" if chemins.EST_GELE
+                    else "app.demarrer.ffmpeg_sources"),
             }
         dossier = Path(self.config.get("dossier_sortie") or "")
         try:
@@ -631,7 +839,7 @@ class Passerelle:
         except OSError as exc:
             return {
                 "ok": False,
-                "message": f"Le dossier de sortie n'est pas accessible en écriture ({exc.strerror}).",
+                "message": langues.t("app.demarrer.sortie", erreur=exc.strerror),
             }
 
         refus = self._verifier_modele_disponible()
@@ -641,17 +849,15 @@ class Passerelle:
         if self.config.get("diarisation"):
             manque = diarisation.indisponibilite()
             if manque:
-                self._sur_journal("attention", f"Séparation des locuteurs ignorée : {manque}")
-            elif not diarisation.jeton_present():
                 self._sur_journal(
-                    "attention",
-                    "Aucun jeton Hugging Face : la transcription se fera sans étiquettes de locuteur.",
-                )
+                    "attention", langues.t("app.diar.ignoree", raison=manque))
+            elif not diarisation.jeton_present():
+                self._sur_journal("attention", langues.t("app.diar.sans_jeton"))
 
         lancee = self.file.demarrer(self.config, self._rappels)
         if not lancee:
-            return {"ok": False, "message": "Aucun fichier en attente dans la file."}
-        self._sur_journal("info", "Démarrage de la file.")
+            return {"ok": False, "message": langues.t("app.demarrer.file_vide")}
+        self._sur_journal("info", langues.t("app.demarrer.lancee"))
         return {"ok": True}
 
     def _verifier_modele_disponible(self) -> dict | None:
@@ -678,11 +884,9 @@ class Passerelle:
         if probleme:
             return {
                 "ok": False,
-                "message": (
-                    f"Le modèle doit être téléchargé, mais le dossier prévu « {dossier} » "
-                    f"n'est pas utilisable. {probleme} Choisissez un autre emplacement dans "
-                    "les réglages, section « Modèles »."
-                ),
+                "message": langues.t(
+                    "app.modele.dossier_inutilisable",
+                    dossier=dossier, probleme=probleme),
             }
 
         libre = chemins.espace_libre_go(dossier)
@@ -693,37 +897,24 @@ class Passerelle:
         if libre and requis and libre < requis:
             return {
                 "ok": False,
-                "message": (
-                    f"Il faut environ {taille} pour télécharger ce modèle, et il ne reste "
-                    f"que {presets.nombre_fr(libre)} Go sur le disque de « {dossier} ». "
-                    "Libérez de la place, ou rangez les modèles sur un autre disque dans "
-                    "les réglages, section « Modèles »."
-                ),
+                "message": langues.t(
+                    "app.modele.place", taille=taille,
+                    libre=presets.nombre_fr(libre), dossier=dossier),
             }
 
         if not moteur.connexion_disponible():
             return {
                 "ok": False,
-                "message": (
-                    f"Ce modèle n'est pas encore sur la machine, il pèse environ {taille} et "
-                    "doit être téléchargé une première fois. Or aucune connexion Internet "
-                    "n'a été trouvée. Connectez le poste le temps de ce téléchargement, "
-                    "ensuite l'application fonctionnera définitivement hors ligne. "
-                    "Si un modèle plus léger vous suffit, le preset « Rapide » demande "
-                    "1,6 Go au lieu de 3,1 Go."
-                ),
+                "message": langues.t("app.modele.hors_ligne", taille=taille),
             }
 
-        self._sur_journal(
-            "attention",
-            f"Premier usage de ce modèle : téléchargement d'environ {taille} vers "
-            f"« {dossier} ». Cela n'arrive qu'une fois, ensuite tout reste sur la machine.",
-        )
+        self._sur_journal("attention", langues.t(
+            "app.modele.premier_usage", taille=taille, dossier=dossier))
         return None
 
     def arreter(self) -> None:
         self.file.arreter()
-        self._sur_journal("attention", "Arrêt demandé, la transcription en cours va s'interrompre.")
+        self._sur_journal("attention", langues.t("app.arret"))
 
     # -- historique et ouverture -------------------------------------------
 
@@ -747,7 +938,7 @@ class Passerelle:
                     "nom": fichier.name,
                     "chemin": str(fichier),
                     "format": fichier.suffix.lstrip(".").upper(),
-                    "date": f"{horodatage:%d/%m/%Y à %H:%M}",
+                    "date": horodatage.strftime(langues.t("format.date_heure")),
                     "taille": audio_module.formater_taille(fichier.stat().st_size),
                 })
         self._js(f"onHistorique({_json(elements)})")
@@ -760,10 +951,91 @@ class Passerelle:
             journal.attention("Lecture impossible de %s : %s", chemin, exc)
             return ""
 
+    # -- vue de lecture ----------------------------------------------------
+
+    def lire_transcription(self, chemin: str) -> dict:
+        """Contenu structuré d'une transcription, pour la vue de lecture."""
+        retour = lecture.charger(chemin)
+        retour["lecture_audio"] = bool(self.config.get("lecture_audio"))
+        return retour
+
+    def copier_pour_ia(self, chemin: str) -> dict:
+        """
+        Met dans le presse-papiers le gabarit d'instructions suivi du texte.
+
+        La copie passe par l'API Windows quand le presse-papiers du navigateur
+        intégré refuse un texte de cette taille.
+        """
+        retour = lecture.texte_pour_ia(chemin)
+        if not retour.get("ok"):
+            return retour
+        texte = retour["texte"]
+        self.copier(texte)
+        journal.info("Texte préparé pour un assistant IA : %s caractères", len(texte))
+        return {
+            "ok": True,
+            "taille": len(texte),
+            "message": langues.t("app.copie_ia", n=len(texte)),
+        }
+
+    def corriger_transcription(self, chemin: str, source: str, cible: str,
+                               ajouter_regle: bool = True) -> dict:
+        """Applique une correction relue au fichier, au compagnon et aux règles."""
+        if not self.config.get("corrections_apprises", True):
+            ajouter_regle = False
+        retour = lecture.appliquer_correction(chemin, source, cible, ajouter_regle)
+        if retour.get("regle_ajoutee"):
+            regles, _ = vocabulaire.analyser_corrections()
+            retour["nb_corrections"] = len(regles)
+        return retour
+
+    def lire_gabarit(self) -> dict:
+        return {"contenu": gabarit.lire(), "chemin": str(gabarit.fichier())}
+
+    def sauver_gabarit(self, contenu: str) -> dict:
+        gabarit.ecrire(contenu or "")
+        journal.info("Gabarit d'instructions enregistré.")
+        return {"ok": True, "message": langues.t("app.gabarit_enregistre")}
+
+    # -- reprise d'une transcription interrompue ---------------------------
+
+    def _reprises(self) -> list[dict]:
+        elements = []
+        for item in reprise.lister():
+            elements.append({
+                **item,
+                "position_texte": presets.formater_duree(item["position"]),
+                "duree_texte": presets.formater_duree(item["duree_audio"]),
+                "ecoule_texte": presets.formater_duree(item["ecoule"]),
+            })
+        return elements
+
+    def liste_reprises(self) -> list[dict]:
+        return self._reprises()
+
+    def reprendre(self, cle: str) -> dict:
+        """Remet en file un fichier interrompu, à l'endroit où il s'était arrêté."""
+        etat = reprise.lire_etat(cle or "")
+        if not etat:
+            return {"ok": False, "message": langues.t("app.reprise.indisponible")}
+        ajoute = self.file.ajouter_pour_reprise(etat.get("source", ""), cle)
+        if not ajoute:
+            return {"ok": False, "message": langues.t("app.reprise.introuvable")}
+        self._js(f"onFichiersAjoutes({_json([ajoute])})")
+        self._sur_journal("info", langues.t(
+            "app.reprise.remise", nom=ajoute["nom"],
+            position=presets.formater_duree(float(etat.get("position", 0) or 0)),
+        ))
+        return {"ok": True, "reprises": self._reprises()}
+
+    def oublier_reprise(self, cle: str) -> dict:
+        reprise.oublier(cle or "")
+        return {"ok": True, "reprises": self._reprises()}
+
     def ouvrir(self, chemin: str) -> None:
         cible = Path(chemin or "")
         if not cible.exists():
-            self._sur_journal("attention", "Ce fichier n'existe plus.")
+            self._sur_journal("attention", langues.t("app.fichier_disparu"))
             return
         try:
             if sys.platform == "win32":
@@ -824,12 +1096,10 @@ def _installer_depot(passerelle: Passerelle, fenetre) -> None:
                 f.get("pywebviewFullPath") for f in fichiers if f.get("pywebviewFullPath")
             ]
             if chemins_deposes:
-                passerelle._enregistrer_fichiers(chemins_deposes)
+                passerelle._enregistrer_depot(chemins_deposes)
             else:
                 passerelle._sur_journal(
-                    "attention",
-                    "Le chemin des fichiers déposés n'a pas pu être lu. Utilisez le bouton « Parcourir ».",
-                )
+                    "attention", langues.t("app.depot.chemin_illisible"))
         except Exception as exc:
             journal.exception("Dépôt de fichiers en échec", exc)
         finally:
@@ -847,6 +1117,27 @@ def _installer_depot(passerelle: Passerelle, fenetre) -> None:
 def _au_demarrage(passerelle: Passerelle, fenetre) -> None:
     _installer_depot(passerelle, fenetre)
     passerelle.charger_historique()
+    # Traces de reprise devenues sans objet : fichier source disparu, ou plus
+    # vieilles que la rétention. Rien de visible, juste du ménage.
+    passerelle._fond(reprise.purger)
+
+    # Barre de progression de l'icône : la fenêtre existe maintenant, elle se
+    # retrouve par son titre. Sans elle, le module reste simplement inerte.
+    if passerelle.config.get("barre_taches", True):
+        passerelle._fond(lambda: barre_taches.definir_fenetre(NOM_APPLICATION))
+
+    # Dossier surveillé : le fil ne démarre que si l'utilisateur l'a demandé.
+    if passerelle.config.get("surveillance") and passerelle.config.get("dossier_surveille"):
+        # Sans adoption : ce qui est arrivé pendant que l'application était
+        # fermée est bien nouveau, et la mémoire persistante empêche de
+        # reprendre ce qui a déjà été transcrit.
+        passerelle.surveillant.configurer(
+            str(passerelle.config.get("dossier_surveille") or ""), True, adopter=False
+        )
+
+    # Vérification de mise à jour : seul appel réseau sortant possible, et
+    # seulement si l'utilisateur l'a activée. La méthode le revérifie.
+    passerelle.verifier_maj()
 
 
 def principal() -> None:
@@ -870,10 +1161,7 @@ def principal() -> None:
         journal.exception("La fenêtre n'a pas pu s'ouvrir", exc)
         _abandonner(
             NOM_APPLICATION,
-            "La fenêtre n'a pas pu s'ouvrir.\n\nSous Windows, cela vient presque "
-            "toujours de « Microsoft Edge WebView2 Runtime », absent du poste. "
-            "Installez-le puis relancez.\n\nDétail : "
-            f"logs/{journal.nom_fichier()}",
+            langues.t("app.fenetre_impossible", journal=journal.nom_fichier()),
         )
 
 

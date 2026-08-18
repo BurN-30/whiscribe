@@ -1,8 +1,11 @@
 /* =========================================================================
-   WhiScribe — logique d'interface
+   WhiScribe : logique d'interface
 
-   Le Python appelle les fonctions globales onXxx() définies plus bas.
+   Le Python appelle les fonctions globales onXxx() definies plus bas.
    L'interface appelle Python via pywebview.api.*
+
+   Aucun libelle en dur ici : tout passe par t() et tn(), definis dans
+   web/langues.js, jumeau de app/langues.py. Voir outils/verifier_traductions.py.
    ========================================================================= */
 
 'use strict';
@@ -10,7 +13,7 @@
 const etat = {
   config: {},
   presets: [],
-  fichiers: new Map(),   // identifiant -> données de la ligne
+  fichiers: new Map(),   // identifiant -> donnees de la ligne
   historique: [],
   diarisation: { disponible: false, jeton_present: false, guide: {} },
   modeles: { dossier: '', presets: [] },
@@ -18,6 +21,11 @@ const etat = {
   enCours: false,
   apercuChemin: null,
   importChemin: null,
+  reprises: [],
+  lecture: null,          // transcription ouverte dans la vue de lecture
+  selection: '',          // expression selectionnee, en attente de correction
+  surveillance: { actif: false, dossier: '', probleme: '' },
+  maj: null,              // version plus recente annoncee par le bandeau
   pret: false,
 };
 
@@ -30,32 +38,36 @@ function ech(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function nbFr(valeur, decimales) {
-  return Number(valeur).toFixed(decimales === undefined ? 2 : decimales).replace('.', ',');
-}
-
 function icone(nom, classe) {
   return `<svg class="icone ${classe || ''}"><use href="#${nom}"></use></svg>`;
 }
 
-/* ------------------------------------------------------------ Démarrage */
+/* ------------------------------------------------------------ Demarrage */
 
 window.addEventListener('pywebviewready', async () => {
   try {
     const donnees = await pywebview.api.etat_initial();
     initialiser(donnees);
   } catch (e) {
-    journaliser('erreur', "L'interface n'a pas pu récupérer l'état de l'application.");
+    journaliser('erreur', t('ui.journal.etat_perdu'));
     console.error(e);
   }
 });
 
-function initialiser(d) {
+function initialiser(d, silencieux) {
   etat.config = d.config || {};
   etat.presets = d.presets || [];
   etat.diarisation = d.diarisation || etat.diarisation;
   etat.modeles = d.modeles || etat.modeles;
+  etat.reprises = d.reprises || [];
+  etat.surveillance = d.surveillance || etat.surveillance;
   etat.versionInstallee = !!d.version_installee;
+
+  // Python fait autorite sur la langue : il l'a detectee au premier lancement
+  // et l'a rangee dans la configuration. La langue provisoire posee au
+  // chargement du document n'a servi qu'a eviter une fenetre vide.
+  if (etat.config.langue_interface) definirLangue(etat.config.langue_interface);
+  traduirePage();
 
   $('#version').textContent = 'v' + d.version;
   appliquerTheme(etat.config.theme || 'auto');
@@ -69,20 +81,46 @@ function initialiser(d) {
   majCorrections(d.corrections || {});
   majDiarisation();
   majModeles();
+  majSurveillance();
+  majQualiteLangue();
+  majApercuMotif();
+  dessinerReprises();
+  dessinerFile();
+  dessinerHistorique();
   afficherAvertissements(d.avertissements || []);
 
-  if (!d.ffmpeg) {
-    journaliser('erreur',
-      "FFmpeg est introuvable : aucun fichier ne pourra être lu. Relancez « installer.bat ».");
+  if (!silencieux) {
+    if (!d.ffmpeg) journaliser('erreur', t('ui.journal.ffmpeg'));
+    journaliser('info', t('ui.journal.pret', { fichier: d.journal }));
   }
-  journaliser('info', 'Prêt. Journal détaillé : logs/' + d.journal);
 
   etat.pret = true;
   majBoutons();
   pywebview.api.charger_historique();
 }
 
-/* -------------------------------------------------------------- Matériel */
+/* --------------------------------------------------- Langue de l'interface
+
+   Sans rapport avec la langue parlee : celle-ci pilote le moteur de
+   transcription, celle-la l'affichage. Le changement est immediat, sans
+   redemarrage : les libelles du HTML sont reposes ici, et l'etat complet est
+   redemande a Python, qui renvoie ses propres textes dans la nouvelle langue. */
+
+async function changerLangueInterface(code) {
+  definirLangue(code);
+  traduirePage();
+  etat.config.langue_interface = langueCourante();
+  try {
+    await pywebview.api.sauver_config({ langue_interface: langueCourante() });
+    const d = await pywebview.api.etat_initial();
+    initialiser(d, true);
+  } catch (e) {
+    console.error(e);
+  }
+  journaliser('info', t('ui.journal.langue'));
+}
+
+/* -------------------------------------------------------------- Materiel */
 
 function dessinerMateriel(mat, reco) {
   $('#materiel-resume').textContent = mat.resume;
@@ -93,33 +131,39 @@ function dessinerMateriel(mat, reco) {
     lignes.push(`<div class="materiel-ligne"><span class="cle">${ech(cle)}</span>
       <span class="valeur ${classe || ''}">${ech(valeur)}</span></div>`);
 
-  ajout('Processeur', mat.cpu_nom);
-  ajout('Cœurs', (mat.coeurs_physiques ? mat.coeurs_physiques + ' physiques, ' : '')
-    + mat.coeurs_logiques + ' logiques, ' + mat.fils_calcul + ' utilisés');
-  ajout('Mémoire vive', nbFr(mat.ram_go, 1) + ' Go'
-    + (mat.ram_libre_go ? ' (' + nbFr(mat.ram_libre_go, 1) + ' Go libres)' : ''));
+  ajout(t('ui.materiel.processeur'), mat.cpu_nom);
+  ajout(t('ui.materiel.coeurs'), t('ui.materiel.detail_coeurs', {
+    physiques: mat.coeurs_physiques ? t('ui.materiel.physiques', { n: mat.coeurs_physiques }) : '',
+    logiques: mat.coeurs_logiques,
+    fils: mat.fils_calcul,
+  }));
+  ajout(t('ui.materiel.memoire'), mat.ram_libre_go
+    ? t('ui.materiel.ram_libre', { total: nb(mat.ram_go, 1), libre: nb(mat.ram_libre_go, 1) })
+    : t('ui.materiel.ram', { total: nb(mat.ram_go, 1) }));
   (mat.gpus || []).forEach((g) => {
-    ajout('Carte graphique', g.nom + (g.memoire_mo ? ' — ' + nbFr(g.memoire_mo / 1024, 1) + ' Go' : ''));
+    ajout(t('ui.materiel.gpu'), g.memoire_mo
+      ? t('ui.materiel.gpu_memoire', { nom: g.nom, go: nb(g.memoire_mo / 1024, 1) })
+      : g.nom);
     if (g.note) ajout('', g.note, g.accelere ? '' : 'mention-honnete');
   });
   (mat.npus || []).forEach((n) => {
-    ajout('Circuit neuronal', n.nom);
+    ajout(t('ui.materiel.npu'), n.nom);
     if (n.note) ajout('', n.note, 'mention-honnete');
   });
-  if (!mat.gpus.length) ajout('Carte graphique', 'aucune carte dédiée détectée');
-  ajout('Calcul retenu', mat.peripherique === 'cuda'
-    ? 'NVIDIA CUDA, précision float16'
-    : 'processeur, quantification int8');
-  ajout('Système', mat.systeme);
+  if (!mat.gpus.length) ajout(t('ui.materiel.gpu'), t('ui.materiel.sans_gpu'));
+  ajout(t('ui.materiel.calcul'), mat.peripherique === 'cuda'
+    ? t('ui.materiel.calcul_cuda')
+    : t('ui.materiel.calcul_cpu'));
+  ajout(t('ui.materiel.systeme'), mat.systeme);
 
   lignes.push('<div style="height:8px"></div>');
   (reco.estimations || []).forEach((e) => {
-    ajout(e.nom, 'environ ' + e.pour_une_heure + ' pour une heure d\'audio (facteur '
-      + nbFr(e.facteur) + ')');
+    ajout(e.nom, t('ui.materiel.estimation', {
+      duree: e.pour_une_heure, facteur: nb(e.facteur),
+    }));
   });
   lignes.push(`<div class="materiel-ligne"><span class="cle"></span>
-    <span class="valeur" style="font-size:11.5px">Estimations, pas des garanties :
-    l'interface affiche le temps réellement mesuré à chaque transcription.</span></div>`);
+    <span class="valeur" style="font-size:11.5px">${ech(t('ui.materiel.avis'))}</span></div>`);
 
   $('#materiel-detail').innerHTML = lignes.join('');
 }
@@ -139,13 +183,12 @@ function dessinerPresets(reco) {
     <button class="preset" data-preset="${ech(p.cle)}" aria-pressed="false">
       <span class="titre">
         <span class="marqueur"></span>${ech(p.nom)}
-        ${p.cle === conseille ? '<span class="conseille">conseillé ici</span>' : ''}
+        ${p.cle === conseille ? `<span class="conseille">${ech(t('ui.preset.conseille'))}</span>` : ''}
       </span>
       <span class="desc">${ech(p.resume)}</span>
-      <span class="chiffres">
-        ${ech(p.modele)} · environ ${ech(p.pour_une_heure)} pour une heure d'audio
-        · téléchargement ${ech(p.telechargement)}
-      </span>
+      <span class="chiffres">${ech(t('ui.preset.chiffres', {
+        modele: p.modele, duree: p.pour_une_heure, poids: p.telechargement,
+      }))}</span>
     </button>`).join('');
 
   $$('#presets .preset').forEach((b) => {
@@ -167,16 +210,20 @@ function majPresetActif() {
 
 function remplirModelesAvances(modeles) {
   const sel = $('#modele-avance');
-  sel.innerHTML = '<option value="">Modèle du preset</option>' + modeles.map((m) =>
-    `<option value="${ech(m.cle)}">${ech(m.nom)} — ${ech(m.taille)}, qualité ${ech(m.qualite.toLowerCase())}</option>`
-  ).join('');
+  const choisi = sel.value;
+  sel.innerHTML = `<option value="">${ech(t('ui.preset.modele_du_preset'))}</option>`
+    + modeles.map((m) => `<option value="${ech(m.cle)}">${ech(t('ui.preset.option_modele', {
+      nom: m.nom, taille: m.taille, qualite: String(m.qualite || '').toLowerCase(),
+    }))}</option>`).join('');
+  if (choisi) sel.value = choisi;
 }
 
-/* -------------------------------------------------------------- Réglages */
+/* -------------------------------------------------------------- Reglages */
 
 function appliquerConfig() {
   const c = etat.config;
   $('#langue').value = c.langue || 'fr';
+  $('#langue-interface').value = langueCourante();
   $('#dossier-sortie').value = c.dossier_sortie || '';
   const f = c.formats || {};
   $('#fmt-txt').checked = f.txt !== false;
@@ -185,6 +232,16 @@ function appliquerConfig() {
   $('#fmt-horodatage').checked = !!f.horodatage;
   $('#opt-glossaire').checked = c.utiliser_glossaire !== false;
   $('#opt-corrections').checked = c.appliquer_corrections !== false;
+  $('#opt-compagnon').checked = c.compagnon_confiance !== false;
+  $('#opt-apprises').checked = c.corrections_apprises !== false;
+  $('#opt-sauvegarde').checked = c.sauvegarde_progressive !== false;
+  $('#opt-lecture-audio').checked = !!c.lecture_audio;
+  $('#motif-sortie').value = c.motif_sortie || '';
+  $('#opt-surveillance').checked = !!c.surveillance;
+  $('#dossier-surveille').value = c.dossier_surveille || '';
+  $('#bloc-surveillance').style.display = c.surveillance ? 'block' : 'none';
+  $('#opt-maj').checked = !!c.maj_verifier;
+  $('#opt-barre-taches').checked = c.barre_taches !== false;
   $('#opt-diarisation').checked = !!c.diarisation;
   $('#nb-locuteurs').value = String(c.nb_locuteurs || 0);
   $('#opt-avance').checked = !!c.mode_avance;
@@ -219,20 +276,19 @@ function majGlossaire(resume) {
   if (!resume) return;
   const el = $('#etat-glossaire');
   if (!resume.nb_termes) {
-    el.textContent = 'Aucun terme, à remplir';
+    el.textContent = t('ui.voc.aucun_terme');
   } else {
-    el.textContent = resume.nb_retenus + ' terme' + (resume.nb_retenus > 1 ? 's' : '')
-      + ' actif' + (resume.nb_retenus > 1 ? 's' : '')
-      + (resume.tronque ? ' sur ' + resume.nb_termes + ', liste tronquée' : '');
+    el.textContent = tn('ui.voc.termes', resume.nb_retenus)
+      + (resume.tronque ? t('ui.voc.tronque', { total: resume.nb_termes }) : '');
   }
 }
 
 function majCorrections(donnees) {
   const el = $('#etat-corrections');
-  const nb = donnees.nb || 0;
-  el.textContent = nb ? nb + ' règle' + (nb > 1 ? 's' : '') : 'Aucune règle';
+  const compte = donnees.nb || 0;
+  el.textContent = compte ? tn('ui.voc.regles', compte) : t('ui.voc.aucune_regle');
   if (donnees.erreurs && donnees.erreurs.length) {
-    el.textContent += ', ' + donnees.erreurs.length + ' ligne(s) en erreur';
+    el.textContent += t('ui.voc.lignes_erreur', { n: donnees.erreurs.length });
   }
 }
 
@@ -242,27 +298,27 @@ function majDiarisation() {
   const bascule = $('#opt-diarisation');
 
   if (!d.disponible) {
-    // Dans la version installée, PyTorch n'est pas embarqué : on l'explique
-    // plutôt que de laisser croire à une installation ratée.
+    // Dans la version installee, PyTorch n'est pas embarque : on l'explique
+    // plutot que de laisser croire a une installation ratee.
     el.textContent = etat.versionInstallee
-      ? 'Non incluse dans la version installée'
-      : 'Composants non installés';
+      ? t('ui.loc.non_incluse')
+      : t('ui.loc.composants_absents');
     bascule.checked = false;
     bascule.disabled = true;
-    $('#libelle-jeton').textContent = 'En savoir plus';
+    $('#libelle-jeton').textContent = t('ui.loc.en_savoir_plus');
   } else if (!d.jeton_present) {
-    el.textContent = 'Jeton Hugging Face à renseigner';
+    el.textContent = t('ui.loc.jeton_a_saisir');
     bascule.disabled = false;
-    $('#libelle-jeton').textContent = "Configurer l'accès";
+    $('#libelle-jeton').textContent = t('ui.loc.configurer');
   } else {
-    el.textContent = bascule.checked ? 'Active' : 'Disponible';
+    el.textContent = bascule.checked ? t('ui.loc.active') : t('ui.loc.disponible');
     bascule.disabled = false;
-    $('#libelle-jeton').textContent = 'Modifier le jeton';
+    $('#libelle-jeton').textContent = t('ui.loc.modifier_jeton');
   }
   $('#bloc-locuteurs').style.display = bascule.checked ? 'block' : 'none';
 }
 
-/* ------------------------------------------------------ Dossier des modèles */
+/* ------------------------------------------------------ Dossier des modeles */
 
 function majModeles() {
   const m = etat.modeles || {};
@@ -271,20 +327,21 @@ function majModeles() {
 
   $('#etat-modeles').textContent = liste.length
     ? (absents.length === 0
-        ? 'Tous les modèles sont téléchargés, ' + m.occupe + ' occupés'
-        : (liste.length - absents.length) + ' modèle(s) sur ' + liste.length
-          + ' téléchargé(s), ' + m.occupe + ' occupés')
-    : m.occupe + ' occupés';
+        ? t('ui.modeles.tous', { occupe: m.occupe })
+        : t('ui.modeles.partiels', {
+            present: liste.length - absents.length, total: liste.length, occupe: m.occupe,
+          }))
+    : t('ui.modeles.occupe', { occupe: m.occupe });
 
   const chemin = $('#chemin-modeles');
   chemin.textContent = m.dossier || '--';
   chemin.title = m.dossier || '';
 
   const tailles = liste.map((p) => p.nom + ' ' + p.taille).join(', ');
-  $('#aide-modeles').textContent =
-    'Les modèles se téléchargent une seule fois, au premier usage'
-    + (tailles ? ' (' + tailles + ')' : '')
-    + '. Espace libre sur ce disque : ' + (m.libre || '--') + '.';
+  $('#aide-modeles').textContent = t('ui.modeles.aide', {
+    tailles: tailles ? t('ui.modeles.tailles', { liste: tailles }) : '',
+    libre: m.libre || '--',
+  });
 }
 
 function onDossierModeles(retour) {
@@ -301,7 +358,183 @@ function onDossierModeles(retour) {
 }
 window.onDossierModeles = onDossierModeles;
 
-/* ------------------------------------------- Import et export des données */
+/* ------------------------------------------------- Qualite selon la langue
+
+   Une mention d'une ligne sous le selecteur, rien de plus. Les paliers sont
+   cales sur les taux d'erreur (WER) publies par OpenAI pour large-v3 sur le
+   jeu multilingue FLEURS, regroupes en trois classes : sous 5 %, de 5 a 10 %,
+   au-dela de 10 %. Aucune proposition d'un autre modele : large-v3 est deja le
+   meilleur multilingue disponible, il n'y a rien a conseiller de mieux. */
+
+const QUALITE_LANGUES = {
+  es: 'excellente', it: 'excellente', pt: 'excellente', en: 'excellente',
+  de: 'excellente', fr: 'excellente',
+  nl: 'bonne', pl: 'bonne', ro: 'bonne',
+  ar: 'variable',
+};
+
+function majQualiteLangue() {
+  const code = $('#langue').value;
+  const zone = $('#qualite-langue');
+  if (code === 'auto') {
+    zone.textContent = t('ui.qualite.auto');
+    return;
+  }
+  const palier = QUALITE_LANGUES[code];
+  zone.textContent = palier ? t('ui.qualite.' + palier) : '';
+}
+
+/* ------------------------------------------- Nom des fichiers produits */
+
+let minuteurMotif = null;
+
+async function majApercuMotif() {
+  const zone = $('#apercu-motif');
+  try {
+    const r = await pywebview.api.apercu_motif($('#motif-sortie').value);
+    zone.classList.toggle('probleme', !r.ok || !!r.message);
+    if (!r.ok) { zone.textContent = r.message; return; }
+    zone.textContent = r.message
+      ? r.message
+      : t(r.defaut ? 'ui.motif.defaut' : 'ui.motif.exemple', { exemple: r.exemple });
+  } catch (e) {
+    zone.textContent = '';
+  }
+}
+
+async function enregistrerMotif() {
+  const r = await pywebview.api.enregistrer_motif($('#motif-sortie').value);
+  if (!r.ok) {
+    $('#apercu-motif').classList.add('probleme');
+    $('#apercu-motif').textContent = r.message;
+    return;
+  }
+  etat.config.motif_sortie = r.motif;
+  $('#motif-sortie').value = r.motif;
+  majApercuMotif();
+  journaliser('ok', t('ui.motif.enregistre', { motif: r.motif || '{date}-{nom}' }));
+}
+
+/* ------------------------------------------------------ Dossier surveille */
+
+function majSurveillance() {
+  const s = etat.surveillance || {};
+  const indicateur = $('#indic-surveillance');
+  const etiquette = $('#etat-surveillance');
+
+  $('#bloc-surveillance').style.display = s.actif ? 'block' : 'none';
+  if (!s.actif) {
+    indicateur.style.display = 'none';
+    etiquette.textContent = t('ui.veille.coupee');
+    return;
+  }
+  indicateur.style.display = '';
+  indicateur.classList.toggle('defaut', !!s.probleme);
+  indicateur.title = s.probleme || t('ui.veille.titre', { dossier: s.dossier || '' });
+  $('#indic-surveillance-texte').textContent = s.probleme
+    ? t('ui.veille.indic_defaut') : t('ui.veille.indic_actif');
+  etiquette.textContent = s.probleme
+    ? t('ui.veille.etat_defaut')
+    : t('ui.veille.etat_actif', { n: s.intervalle || 10 });
+}
+
+function retourSurveillance(r) {
+  if (!r) return;
+  if (r.dossier !== undefined) etat.surveillance = r;
+  majSurveillance();
+  $('#retour-surveillance').innerHTML = r.message
+    ? (r.ok ? encartSucces(r.message) : encartAttention(r.message)) : '';
+  if (r.ok && r.message) {
+    journaliser('ok', r.message);
+    setTimeout(() => { $('#retour-surveillance').innerHTML = ''; }, 8000);
+  }
+}
+
+async function appliquerSurveillance(actif) {
+  const r = await pywebview.api.configurer_surveillance($('#dossier-surveille').value, actif);
+  if (!r.ok) {
+    // Reglage refuse : la bascule ne doit pas rester allumee pour rien.
+    $('#opt-surveillance').checked = false;
+    etat.config.surveillance = false;
+  } else {
+    etat.config.surveillance = !!actif;
+    etat.config.dossier_surveille = $('#dossier-surveille').value;
+  }
+  retourSurveillance(r);
+}
+
+window.onDossierSurveille = function (chemin) {
+  if (!chemin) {
+    // Selection annulee : on ne laisse pas la bascule allumee sur rien.
+    if (!$('#dossier-surveille').value) {
+      $('#opt-surveillance').checked = false;
+      $('#bloc-surveillance').style.display = 'none';
+    }
+    return;
+  }
+  $('#dossier-surveille').value = chemin;
+  appliquerSurveillance($('#opt-surveillance').checked);
+};
+
+window.onSurveillance = function (donnees) {
+  etat.surveillance = donnees || etat.surveillance;
+  majSurveillance();
+};
+
+/* ---------------------------------------------------------- Espace utilise */
+
+function onStockage(mesure) {
+  const zone = $('#contenu-stockage');
+  if (!mesure || mesure.erreur) {
+    zone.innerHTML = encartAttention(t('ui.stockage.echec'));
+    return;
+  }
+  zone.innerHTML = (mesure.postes || []).map((p) => `
+    <div class="stockage-poste">
+      <div class="entete">
+        <span class="libelle">${ech(p.libelle)}</span>
+        <span class="taille">${ech(p.taille)}</span>
+      </div>
+      <div class="chemin">${ech(p.chemin)}</div>
+      <div class="detail">${ech(p.detail)}</div>
+      <div class="actions-poste">
+        <button class="bouton bouton-discret" data-ouvrir-dossier="${ech(p.chemin)}"
+          ${p.existe ? '' : 'disabled'}>
+          ${icone('i-externe', 'icone-s')}
+          ${ech(p.existe ? t('ui.stockage.ouvrir') : t('ui.stockage.absent'))}
+        </button>
+      </div>
+    </div>`).join('')
+    + `<div class="stockage-total">
+         <span>${ech(t('ui.stockage.total'))}</span>
+         <span class="valeur">${ech(mesure.total_texte)}</span>
+         <span class="pousse"></span>
+         <span style="color:var(--texte-faible)">${ech(t('ui.stockage.libre', {
+           libre: mesure.libre,
+         }))}</span>
+       </div>`;
+
+  $$('#contenu-stockage [data-ouvrir-dossier]').forEach((b) => {
+    b.onclick = () => pywebview.api.ouvrir(b.dataset.ouvrirDossier);
+  });
+}
+window.onStockage = onStockage;
+
+/* ----------------------------------------------------- Mise a jour disponible */
+
+function onMiseAJour(info) {
+  if (!info || !info.disponible) return;
+  etat.maj = info;
+  $('#bandeau-maj-texte').textContent = t(
+    info.reinstallation ? 'ui.maj.reinstallation' : 'ui.maj.par_dessus',
+    { version: info.version },
+  );
+  $('#bandeau-maj').style.display = 'flex';
+  journaliser('info', t('ui.maj.journal', { version: info.version }));
+}
+window.onMiseAJour = onMiseAJour;
+
+/* ------------------------------------------- Import et export des donnees */
 
 function onExportDonnees(retour) {
   if (!retour) return;
@@ -316,13 +549,14 @@ function onApercuImport(retour) {
   if (!retour) return;
   if (!retour.ok) {
     $('#retour-donnees').innerHTML = encartAttention(retour.message);
-    journaliser('erreur', 'Import refusé : ' + retour.message);
+    journaliser('erreur', t('ui.import.refuse', { message: retour.message }));
     return;
   }
   etat.importChemin = retour.chemin;
   $('#retour-donnees').innerHTML = '';
-  $('#source-import').textContent = 'Fichier « ' + retour.nom + ' », exporté le '
-    + retour.manifeste.date + ' par la version ' + retour.manifeste.version + '.';
+  $('#source-import').textContent = t('ui.import.source', {
+    nom: retour.nom, date: retour.manifeste.date, version: retour.manifeste.version,
+  });
   $('#apercu-import').innerHTML = apercuImportHTML(retour);
   ouvrirModale('#modale-import');
 }
@@ -334,33 +568,37 @@ function apercuImportHTML(d) {
     `<div class="materiel-ligne"><span class="cle">${ech(cle)}</span>
       <span class="valeur">${ech(valeur)}</span></div>`;
 
-  bloc.push('<h3>Ce que contient ce fichier</h3>');
-  bloc.push(ligne('Glossaire',
-    d.glossaire.nb + ' terme(s), au lieu de ' + d.glossaire.nb_actuel + ' actuellement'));
-  bloc.push(ligne('Corrections',
-    d.corrections.nb + ' règle(s), au lieu de ' + d.corrections.nb_actuel + ' actuellement'));
+  bloc.push(`<h3>${ech(t('ui.import.contenu'))}</h3>`);
+  bloc.push(ligne(t('ui.import.glossaire'),
+    t('ui.import.termes', { nb: d.glossaire.nb, actuel: d.glossaire.nb_actuel })));
+  bloc.push(ligne(t('ui.import.corrections'),
+    t('ui.import.regles', { nb: d.corrections.nb, actuel: d.corrections.nb_actuel })));
   if (d.corrections.erreurs && d.corrections.erreurs.length) {
-    bloc.push(encartAttention(d.corrections.erreurs.length
-      + ' ligne(s) de corrections sont mal écrites dans ce fichier et seront sans effet.'));
+    bloc.push(encartAttention(
+      t('ui.import.regles_fautives', { n: d.corrections.erreurs.length })));
   }
+  /* Le gabarit pour l'IA n'est annonce que s'il voyage dans l'archive : une
+     archive qui n'en porte pas laisse celui du poste intact. */
+  if (d.gabarit && d.gabarit.present) bloc.push(encartInfo(d.gabarit.message));
 
-  bloc.push('<h3>Réglages qui changeraient</h3>');
+  bloc.push(`<h3>${ech(t('ui.import.reglages'))}</h3>`);
   if (!d.reglages.length) {
-    bloc.push('<p>Aucun réglage ne change.</p>');
+    bloc.push(`<p>${ech(t('ui.import.aucun_reglage'))}</p>`);
   } else {
-    d.reglages.forEach((r) => bloc.push(ligne(r.libelle, r.avant + '  →  ' + r.apres)));
+    d.reglages.forEach((r) => bloc.push(ligne(r.libelle,
+      t('ui.import.avant', { avant: r.avant, apres: r.apres }))));
   }
 
   if (d.chemins && d.chemins.length) {
-    bloc.push('<h3>Chemins propres à cette machine</h3>');
+    bloc.push(`<h3>${ech(t('ui.import.chemins'))}</h3>`);
     d.chemins.forEach((c) => {
       bloc.push(c.repris ? encartInfo(c.message) : encartAttention(c.message));
     });
   }
 
-  bloc.push(encartInfo('Avant de remplacer quoi que ce soit, vos données actuelles seront '
-    + 'enregistrées dans « ' + d.dossier_sauvegarde + ' », sous le nom « ' + d.sauvegarde
-    + ' ». Rien n\'est écrasé sans filet.'));
+  bloc.push(encartInfo(t('ui.import.filet', {
+    dossier: d.dossier_sauvegarde, nom: d.sauvegarde,
+  })));
   return bloc.join('');
 }
 
@@ -384,26 +622,23 @@ async function confirmerImport() {
     await rechargerApresImport();
   } catch (e) {
     console.error(e);
-    $('#apercu-import').innerHTML = encartAttention(
-      "L'import n'a pas pu être appliqué. Le détail est dans le journal.");
+    $('#apercu-import').innerHTML = encartAttention(t('ui.import.echec'));
   } finally {
     bouton.disabled = false;
   }
 }
 
-/* Recharge l'état complet de l'interface : un import change les réglages, le
-   glossaire et les corrections d'un seul coup, et un redémarrage serait une
-   corvée pour rien. */
+/* Recharge l'etat complet de l'interface : un import change les reglages, le
+   glossaire et les corrections d'un seul coup, et un redemarrage serait une
+   corvee pour rien. */
 async function rechargerApresImport() {
   try {
     const d = await pywebview.api.etat_initial();
-    initialiser(d);
-    journaliser('info', 'Interface rechargée avec les données importées.');
+    initialiser(d, true);
+    journaliser('info', t('ui.import.rechargee'));
   } catch (e) {
     console.error(e);
-    journaliser('attention',
-      "Les données sont importées, mais l'interface n'a pas pu se recharger : "
-      + 'fermez puis rouvrez WhiScribe pour les voir.');
+    journaliser('attention', t('ui.import.non_rechargee'));
   }
 }
 
@@ -415,7 +650,7 @@ async function rafraichirEstimations() {
         item.duree_secs, etat.config.preset, !!etat.config.diarisation,
         etat.config.mode_avance ? (etat.config.modele_avance || '') : '');
       majLigne(id);
-    } catch (e) { /* sans conséquence */ }
+    } catch (e) { /* sans consequence */ }
   }
 }
 
@@ -426,8 +661,8 @@ function dessinerFile() {
   $('#compteur-file').textContent = String(etat.fichiers.size);
   if (!etat.fichiers.size) {
     vue.innerHTML = `<div class="vide">${icone('i-depot')}
-      <div>Aucun fichier en attente.</div>
-      <div style="font-size:12px;margin-top:4px">Glissez vos enregistrements dans la zone ci-dessus.</div>
+      <div>${ech(t('ui.file.vide'))}</div>
+      <div style="font-size:12px;margin-top:4px">${ech(t('ui.file.vide_aide'))}</div>
     </div>`;
     return;
   }
@@ -453,27 +688,35 @@ function ligneHTML(id) {
 
   let meta = '', classeMeta = '';
   if (it.etat === 'attente') {
-    meta = [it.duree, it.taille, it.estimation ? 'environ ' + it.estimation + ' de calcul' : '']
+    meta = [it.duree, it.taille,
+      it.estimation ? t('ui.ligne.calcul', { duree: it.estimation }) : '']
       .filter(Boolean).join(' · ');
   } else if (actif) {
-    meta = [it.phase || it.message, it.ecoule ? 'écoulé ' + it.ecoule : '',
-      it.restant ? 'reste ' + it.restant : ''].filter(Boolean).join(' · ');
+    meta = [it.phase || it.message,
+      it.ecoule ? t('ui.ligne.ecoule', { duree: it.ecoule }) : '',
+      it.restant ? t('ui.ligne.restant', { duree: it.restant }) : '']
+      .filter(Boolean).join(' · ');
   } else if (it.etat === 'termine') {
     classeMeta = 'succes';
-    meta = ['Terminé en ' + (it.duree_calcul || '?'),
-      it.facteur ? nbFr(it.facteur) + ' x la durée de l\'audio' : '',
-      it.locuteurs ? it.locuteurs + ' locuteurs' : '',
-      it.corrections ? it.corrections + ' corrections' : ''].filter(Boolean).join(' · ');
+    meta = [t('ui.ligne.termine', { duree: it.duree_calcul || '?' }),
+      it.facteur ? t('ui.ligne.facteur', { facteur: nb(it.facteur) }) : '',
+      it.locuteurs ? t('ui.ligne.locuteurs', { n: it.locuteurs }) : '',
+      it.corrections ? t('ui.ligne.corrections', { n: it.corrections }) : '']
+      .filter(Boolean).join(' · ');
   } else if (it.etat === 'erreur') {
     classeMeta = 'erreur';
-    meta = (it.titre || 'Échec') + (it.message ? ' — ' + it.message : '');
+    meta = (it.titre || t('ui.ligne.echec')) + (it.message ? ', ' + it.message : '');
   } else {
-    meta = it.message || 'Annulé';
+    meta = it.message || t('ui.ligne.annule');
   }
 
   const sorties = (it.sorties || []).map((s) =>
     `<span class="sortie" data-ouvrir="${ech(s.chemin)}">${ech(s.format)} · ${ech(s.nom)}</span>`
   ).join('');
+
+  // Une transcription qui vient de se terminer se relit d'un clic, sans passer
+  // par l'onglet des transcriptions ni par un editeur exterieur.
+  const texte = (it.sorties || []).find((s) => s.format === 'TXT');
 
   return `<div class="ligne" data-id="${ech(id)}">
     <span class="pastille ${classe}">${icone(ic, 'icone-s')}</span>
@@ -483,8 +726,9 @@ function ligneHTML(id) {
       ${actif ? `<div class="barre"><span style="width:${it.pct || 0}%"></span></div>` : ''}
       ${sorties ? `<div class="sorties">${sorties}</div>` : ''}
     </div>
-    ${it.etat === 'erreur' ? `<button class="bouton-ligne" data-log title="Ouvrir le journal">${icone('i-info', 'icone-s')}</button>` : ''}
-    ${actif ? '' : `<button class="bouton-ligne" data-retirer title="Retirer">${icone('i-croix', 'icone-s')}</button>`}
+    ${texte ? `<button class="bouton-ligne" data-lire="${ech(texte.chemin)}" title="${ech(t('ui.ligne.lire'))}">${icone('i-loupe', 'icone-s')}</button>` : ''}
+    ${it.etat === 'erreur' ? `<button class="bouton-ligne" data-log title="${ech(t('ui.ligne.journal'))}">${icone('i-info', 'icone-s')}</button>` : ''}
+    ${actif ? '' : `<button class="bouton-ligne" data-retirer title="${ech(t('ui.ligne.retirer'))}">${icone('i-croix', 'icone-s')}</button>`}
   </div>`;
 }
 
@@ -510,7 +754,10 @@ function brancherLignes() {
     b.onclick = (e) => { e.stopPropagation(); pywebview.api.ouvrir_journal(); };
   });
   $$('#vue-file [data-ouvrir]').forEach((b) => {
-    b.onclick = (e) => { e.stopPropagation(); ouvrirApercu(b.dataset.ouvrir); };
+    b.onclick = (e) => { e.stopPropagation(); ouvrirSortie(b.dataset.ouvrir); };
+  });
+  $$('#vue-file [data-lire]').forEach((b) => {
+    b.onclick = (e) => { e.stopPropagation(); ouvrirLecture(b.dataset.lire); };
   });
 }
 
@@ -521,7 +768,7 @@ function dessinerHistorique() {
   $('#compteur-historique').textContent = String(etat.historique.length);
   if (!etat.historique.length) {
     vue.innerHTML = `<div class="vide">${icone('i-horloge')}
-      <div>Aucune transcription dans le dossier de sortie.</div></div>`;
+      <div>${ech(t('ui.historique.vide'))}</div></div>`;
     return;
   }
   vue.innerHTML = etat.historique.map((h) => `
@@ -534,20 +781,294 @@ function dessinerHistorique() {
       <span class="etiquette-format">${ech(h.format)}</span>
     </div>`).join('');
   $$('#vue-historique .ligne').forEach((l) => {
-    l.onclick = () => ouvrirApercu(l.dataset.chemin);
+    l.onclick = () => ouvrirSortie(l.dataset.chemin);
+  });
+}
+
+/* Le texte se relit dans la vue de lecture, les sous-titres restent en apercu
+   brut : personne ne lit un .srt en paragraphes. */
+function ouvrirSortie(chemin) {
+  if (/\.txt$/i.test(chemin || '')) ouvrirLecture(chemin);
+  else ouvrirApercu(chemin);
+}
+
+/* --------------------------------------------------------- Vue de lecture */
+
+function formaterSecondes(valeur) {
+  const total = Math.max(0, Math.round(valeur || 0));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const deux = (n) => String(n).padStart(2, '0');
+  return h ? `${h}:${deux(m)}:${deux(s)}` : `${m}:${deux(s)}`;
+}
+
+/* file:/// pour un chemin Windows. encodeURI laisse « : » et « / » en place et
+   ne code que les espaces et les accents, ce qui est exactement le besoin. */
+function urlFichierLocal(chemin) {
+  return encodeURI('file:///' + String(chemin || '').replace(/\\/g, '/'));
+}
+
+async function ouvrirLecture(chemin) {
+  ouvrirModale('#modale-lecture');
+  $('#titre-lecture').textContent = String(chemin).split(/[\\/]/).pop();
+  $('#lecture-texte').innerHTML =
+    `<p style="color:var(--texte-faible)">${ech(t('ui.lecture.chargement'))}</p>`;
+  $('#lecture-meta').innerHTML = '';
+  $('#lecture-avis').innerHTML = '';
+  $('#lecture-retour').textContent = '';
+  $('#lecture-audio').innerHTML = '';
+  $('#lecture-legende').style.display = 'none';
+  await chargerLecture(chemin);
+}
+
+async function chargerLecture(chemin) {
+  let d;
+  try {
+    d = await pywebview.api.lire_transcription(chemin);
+  } catch (e) {
+    console.error(e);
+    d = { ok: false, message: t('ui.lecture.non_lue') };
+  }
+  if (!d || !d.ok) {
+    etat.lecture = null;
+    $('#lecture-texte').innerHTML = '';
+    $('#lecture-avis').innerHTML =
+      encartAttention((d && d.message) || t('ui.lecture.impossible'));
+    return;
+  }
+  etat.lecture = d;
+  dessinerLecture();
+}
+
+function dessinerLecture() {
+  const d = etat.lecture;
+  if (!d) return;
+  const m = d.meta || {};
+
+  $('#titre-lecture').textContent = d.nom;
+  $('#lecture-meta').innerHTML = [
+    [t('ui.lecture.meta_fichier'), m.fichier],
+    [t('ui.lecture.meta_duree'), m.duree],
+    [t('ui.lecture.meta_date'), m.date],
+    [t('ui.lecture.meta_modele'), m.modele],
+    [t('ui.lecture.meta_locuteurs'), m.locuteurs_texte],
+  ].filter((x) => x[1]).map((x) =>
+    `<span><span class="cle">${ech(x[0])}</span> ${ech(x[1])}</span>`).join('');
+
+  $('#lecture-avis').innerHTML = d.message ? encartInfo(d.message) : '';
+
+  const stats = d.statistiques || {};
+  const legende = $('#lecture-legende');
+  legende.style.display = d.compagnon ? 'flex' : 'none';
+  if (d.compagnon && stats.mots) {
+    const part = (stats.signales ? nb(stats.signales / stats.mots * 100, 1) : '0')
+      + ' ' + t('unite.pourcent');
+    $('#lecture-legende-texte').textContent = t('ui.lecture.legende_chiffree', {
+      signales: stats.signales, total: stats.mots, part: part,
+    });
+  } else {
+    $('#lecture-legende-texte').textContent = t('ui.lecture.legende');
+  }
+
+  // Ecoute de l'extrait : le fichier d'origine peut avoir ete deplace depuis,
+  // auquel cas on le dit sobrement au lieu d'afficher un lecteur mort.
+  const zoneAudio = $('#lecture-audio');
+  zoneAudio.innerHTML = '';
+  if (d.lecture_audio) {
+    if (m.source_presente) {
+      zoneAudio.innerHTML = `<audio id="lecture-son" controls preload="none"
+        src="${ech(urlFichierLocal(m.source_chemin))}"></audio>`;
+      const son = $('#lecture-son');
+      son.addEventListener('error', () => {
+        zoneAudio.innerHTML = encartInfo(t('ui.lecture.audio_illisible'));
+      });
+    } else {
+      zoneAudio.innerHTML = encartInfo(t('ui.lecture.audio_absent'));
+    }
+  }
+
+  const seuils = d.seuils || { faible: 0.5, tres_faible: 0.3 };
+  const ecoutable = !!(d.lecture_audio && m.source_presente);
+  $('#lecture-texte').innerHTML = (d.paragraphes || []).map((p) => `
+    <div class="lecture-para ${ecoutable ? 'ecoutable' : ''}" data-debut="${p.debut || 0}">
+      ${p.locuteur ? `<span class="locuteur">${ech(p.locuteur)}
+        ${ecoutable || p.debut ? `<span class="horodatage">${formaterSecondes(p.debut)}</span>` : ''}</span>` : ''}
+      ${p.mots.map((mot) => motHTML(mot, seuils)).join(' ')}
+    </div>`).join('')
+    || `<p style="color:var(--texte-faible)">${ech(t('ui.lecture.sans_texte'))}</p>`;
+}
+
+function motHTML(mot, seuils) {
+  const texte = ech(mot.t);
+  if (mot.p < 0) return texte;   // confiance inconnue : mot ordinaire
+  let classe = '';
+  if (mot.p < seuils.tres_faible) classe = ' mot-fort';
+  else if (mot.p < seuils.faible) classe = ' mot-doux';
+  return `<span class="mot${classe}" data-p="${Math.round(mot.p * 100)}">${texte}</span>`;
+}
+
+/* L'infobulle est posee au survol, pas a la construction : une reunion d'une
+   heure represente plusieurs milliers de mots, autant d'attributs inutiles. */
+function infobulleMot(evenement) {
+  const cible = evenement.target;
+  if (!cible || !cible.classList || !cible.classList.contains('mot')) return;
+  if (cible.hasAttribute('title')) return;
+  cible.setAttribute('title', t('ui.lecture.confiance', { pct: cible.dataset.p }));
+}
+
+function texteLecture() {
+  const d = etat.lecture;
+  if (!d) return '';
+  return (d.paragraphes || []).map((p) =>
+    (p.locuteur ? p.locuteur + ' : ' : '') + p.mots.map((m) => m.t).join(' ')
+  ).join('\n\n');
+}
+
+function retourLecture(texte, classe) {
+  const zone = $('#lecture-retour');
+  zone.textContent = texte;
+  zone.className = 'lecture-retour ' + (classe || '');
+  if (texte) setTimeout(() => { if (zone.textContent === texte) zone.textContent = ''; }, 8000);
+}
+
+async function copier(texte) {
+  try { await navigator.clipboard.writeText(texte); }
+  catch (e) { pywebview.api.copier(texte); }
+}
+
+/* ------------------------------------------- Correction depuis la lecture */
+
+function positionnerBoutonCorrection() {
+  const bouton = $('#btn-corriger-selection');
+  const selection = window.getSelection();
+  const zone = $('#lecture-texte');
+  if (!selection || selection.isCollapsed || !zone.contains(selection.anchorNode)) {
+    bouton.classList.remove('visible');
+    return;
+  }
+  const texte = selection.toString().trim().replace(/\s+/g, ' ');
+  if (!texte || texte.length > 80) {
+    bouton.classList.remove('visible');
+    return;
+  }
+  etat.selection = texte;
+  const rect = selection.getRangeAt(0).getBoundingClientRect();
+  bouton.style.left = Math.max(8, Math.min(window.innerWidth - 130, rect.left)) + 'px';
+  bouton.style.top = (rect.bottom + 6) + 'px';
+  bouton.classList.add('visible');
+}
+
+function masquerBoutonCorrection() {
+  $('#btn-corriger-selection').classList.remove('visible');
+}
+
+function ouvrirCorrection() {
+  masquerBoutonCorrection();
+  if (!etat.selection || !etat.lecture) return;
+  $('#correction-source').value = etat.selection;
+  $('#correction-cible').value = etat.selection;
+  $('#correction-regle').checked = etat.config.corrections_apprises !== false;
+  $('#case-regle').style.display = etat.config.corrections_apprises === false ? 'none' : '';
+  $('#retour-correction').innerHTML = '';
+  majQuestionRegle();
+  ouvrirModale('#modale-correction');
+  setTimeout(() => { $('#correction-cible').focus(); $('#correction-cible').select(); }, 50);
+}
+
+function majQuestionRegle() {
+  const source = $('#correction-source').value.trim();
+  const cible = $('#correction-cible').value.trim();
+  $('#correction-question').textContent = t('ui.correction.question_detaillee', {
+    source: source, cible: cible || t('ui.correction.attente'),
+  });
+}
+
+async function appliquerCorrection() {
+  if (!etat.lecture) return;
+  const bouton = $('#btn-appliquer-correction');
+  const source = $('#correction-source').value.trim();
+  const cible = $('#correction-cible').value.trim();
+  bouton.disabled = true;
+  try {
+    const r = await pywebview.api.corriger_transcription(
+      etat.lecture.chemin, source, cible, $('#correction-regle').checked);
+    if (!r.ok) {
+      $('#retour-correction').innerHTML = encartAttention(r.message);
+      return;
+    }
+    fermerModale($('#modale-correction'));
+    if (r.nb_corrections !== undefined) majCorrections({ nb: r.nb_corrections, erreurs: [] });
+    journaliser('ok', t('ui.correction.journal', {
+      source: source, cible: cible, message: r.message,
+    }));
+    await chargerLecture(etat.lecture.chemin);
+    retourLecture(r.message, 'ok');
+  } catch (e) {
+    console.error(e);
+    $('#retour-correction').innerHTML = encartAttention(t('ui.correction.echec'));
+  } finally {
+    bouton.disabled = false;
+  }
+}
+
+/* --------------------------------------------------- Reprises en attente */
+
+function dessinerReprises() {
+  const zone = $('#bloc-reprises');
+  if (!etat.reprises.length) { zone.innerHTML = ''; return; }
+  zone.innerHTML = etat.reprises.map((r) => `
+    <div class="reprise-carte" data-cle="${ech(r.cle)}">
+      ${icone('i-reprise')}
+      <div class="infos">
+        <div class="nom">${ech(r.nom)}</div>
+        <div class="meta">${ech(t('ui.reprise.meta', {
+          position: r.position_texte, duree: r.duree_texte, pct: r.pct,
+          ecoule: r.ecoule_texte,
+        }))}</div>
+      </div>
+      <button class="bouton" data-reprendre>${ech(t('ui.reprise.reprendre'))}</button>
+      <button class="bouton bouton-discret" data-oublier>${ech(t('ui.reprise.oublier'))}</button>
+    </div>`).join('');
+
+  $$('#bloc-reprises [data-reprendre]').forEach((b) => {
+    b.onclick = async () => {
+      const cle = b.closest('.reprise-carte').dataset.cle;
+      const r = await pywebview.api.reprendre(cle);
+      if (!r.ok) {
+        journaliser('attention', r.message);
+        etat.reprises = etat.reprises.filter((x) => x.cle !== cle);
+        dessinerReprises();
+        return;
+      }
+      // La reprise reste sur le disque jusqu'a la fin du calcul, mais elle est
+      // maintenant dans la file : la proposer une seconde fois n'a plus de sens.
+      etat.reprises = etat.reprises.filter((x) => x.cle !== cle);
+      dessinerReprises();
+      majBoutons();
+    };
+  });
+  $$('#bloc-reprises [data-oublier]').forEach((b) => {
+    b.onclick = async () => {
+      const cle = b.closest('.reprise-carte').dataset.cle;
+      const r = await pywebview.api.oublier_reprise(cle);
+      etat.reprises = (r && r.reprises) || [];
+      dessinerReprises();
+      journaliser('info', t('ui.reprise.oubliee'));
+    };
   });
 }
 
 async function ouvrirApercu(chemin) {
   etat.apercuChemin = chemin;
   $('#titre-apercu').textContent = chemin.split(/[\\/]/).pop();
-  $('#contenu-apercu').textContent = 'Chargement...';
+  $('#contenu-apercu').textContent = t('ui.apercu.chargement');
   ouvrirModale('#modale-apercu');
   try {
     const texte = await pywebview.api.lire_texte(chemin);
-    $('#contenu-apercu').textContent = texte || '(fichier vide ou illisible)';
+    $('#contenu-apercu').textContent = texte || t('ui.apercu.vide');
   } catch (e) {
-    $('#contenu-apercu').textContent = '(lecture impossible)';
+    $('#contenu-apercu').textContent = t('ui.apercu.illisible');
   }
 }
 
@@ -555,7 +1076,7 @@ async function ouvrirApercu(chemin) {
 
 function journaliser(niveau, texte) {
   const zone = $('#journal-contenu');
-  const heure = new Date().toLocaleTimeString('fr-FR', { hour12: false });
+  const heure = new Date().toLocaleTimeString(t('format.heure'), { hour12: false });
   const ligne = document.createElement('div');
   ligne.className = 'l';
   ligne.innerHTML = `<span class="h">${heure}</span><span class="${ech(niveau)}">${ech(texte)}</span>`;
@@ -575,7 +1096,7 @@ function basculerJournal() {
   enregistrer({ journal_ouvert: ouvert });
 }
 
-/* ------------------------------------------------------------ État global */
+/* ------------------------------------------------------------ Etat global */
 
 function setEtat(texte, classe) {
   $('#etat-texte').textContent = texte;
@@ -586,11 +1107,11 @@ function majBoutons() {
   const enAttente = Array.from(etat.fichiers.values()).filter((f) => f.etat === 'attente').length;
   $('#btn-lancer').disabled = etat.enCours || !enAttente || !etat.pret;
   $('#btn-arreter').disabled = !etat.enCours;
-  $('#btn-lancer').innerHTML = icone('i-lecture', 'icone-s')
-    + (enAttente > 1 ? ` Transcrire ${enAttente} fichiers` : ' Lancer la transcription');
+  $('#btn-lancer').innerHTML = icone('i-lecture', 'icone-s') + ' '
+    + ech(enAttente > 1 ? t('ui.bouton.lancer_n', { n: enAttente }) : t('ui.bouton.lancer'));
 }
 
-/* ------------------------------------------- Rappels appelés par Python */
+/* ------------------------------------------- Rappels appeles par Python */
 
 window.onFichiersAjoutes = function (items) {
   items.forEach((it) => etat.fichiers.set(it.id, Object.assign({ pct: 0 }, it)));
@@ -608,7 +1129,7 @@ window.onDuree = async function (id, secondes, texte) {
     it.estimation = await pywebview.api.estimation(
       secondes, etat.config.preset, !!etat.config.diarisation,
       etat.config.mode_avance ? (etat.config.modele_avance || '') : '');
-  } catch (e) { /* sans conséquence */ }
+  } catch (e) { /* sans consequence */ }
   majLigne(id);
 };
 
@@ -630,7 +1151,7 @@ window.onEtat = function (id, nouvelEtat, message) {
   if (nouvelEtat !== 'attente') it.phase = message;
   majLigne(id);
   if (['decodage', 'transcription', 'locuteurs', 'ecriture'].includes(nouvelEtat)) {
-    setEtat(message + ' — ' + it.nom, 'actif');
+    setEtat(t('ui.etat.en_cours', { message: message, nom: it.nom }), 'actif');
   }
 };
 
@@ -644,13 +1165,15 @@ window.onProgression = function (id, d) {
     if (barre) barre.style.width = d.pct + '%';
     const meta = ligne.querySelector('.meta');
     if (meta) {
-      meta.textContent = [d.phase, d.ecoule ? 'écoulé ' + d.ecoule : '',
-        d.restant ? 'reste ' + d.restant : ''].filter(Boolean).join(' · ');
+      meta.textContent = [d.phase,
+        d.ecoule ? t('ui.ligne.ecoule', { duree: d.ecoule }) : '',
+        d.restant ? t('ui.ligne.restant', { duree: d.restant }) : '']
+        .filter(Boolean).join(' · ');
     }
   } else {
     majLigne(id);
   }
-  setEtat(`${d.phase} ${d.pct} % — ${it.nom}`, 'actif');
+  setEtat(t('ui.etat.progression', { phase: d.phase, pct: d.pct, nom: it.nom }), 'actif');
 };
 
 window.onFichierTermine = function (id, d) {
@@ -665,7 +1188,7 @@ window.onFichierTermine = function (id, d) {
     it.corrections = d.corrections;
   } else if (d.annule) {
     it.etat = 'annule';
-    it.message = 'Arrêté avant la fin';
+    it.message = t('ui.ligne.arrete');
   } else {
     it.etat = 'erreur';
     it.titre = d.titre;
@@ -679,15 +1202,22 @@ window.onFileTerminee = function (d) {
   etat.enCours = false;
   majBoutons();
   if (d.echecs) {
-    setEtat(`${d.reussis} réussie(s), ${d.echecs} en échec`, 'erreur');
+    setEtat(t('ui.etat.bilan_echecs', { reussis: d.reussis, echecs: d.echecs }), 'erreur');
   } else if (d.annules) {
-    setEtat(`Arrêté — ${d.reussis} transcription(s) produite(s)`, '');
+    setEtat(t('ui.etat.bilan_arrete', { reussis: d.reussis }), '');
   } else {
-    setEtat(`${d.reussis} transcription(s) terminée(s)`, 'succes');
+    setEtat(t('ui.etat.bilan_ok', { reussis: d.reussis }), 'succes');
   }
-  journaliser(d.echecs ? 'attention' : 'ok',
-    `File terminée : ${d.reussis} réussie(s), ${d.echecs} en échec, ${d.annules} annulée(s).`);
+  journaliser(d.echecs ? 'attention' : 'ok', t('ui.etat.file_terminee', {
+    reussis: d.reussis, echecs: d.echecs, annules: d.annules,
+  }));
   pywebview.api.charger_historique();
+  // Un fichier arrete en route laisse une reprise : elle est proposee tout de
+  // suite, sans attendre le prochain demarrage de l'application.
+  pywebview.api.liste_reprises().then((liste) => {
+    etat.reprises = liste || [];
+    dessinerReprises();
+  }).catch(() => { /* sans consequence */ });
 };
 
 window.onJournal = function (niveau, texte) {
@@ -701,10 +1231,26 @@ window.finDepot = function () {
 /* ---------------------------------------------------------------- Modales */
 
 function ouvrirModale(selecteur) { $(selecteur).classList.add('ouvert'); }
-function fermerModale(el) { el.classList.remove('ouvert'); }
-function fermerToutesModales() { $$('.voile.ouvert').forEach(fermerModale); }
 
-/* ------------------------------------------------------- Thème et zoom */
+function fermerModale(el) {
+  el.classList.remove('ouvert');
+  if (el.id === 'modale-lecture') {
+    masquerBoutonCorrection();
+    const son = $('#lecture-son');
+    if (son) son.pause();
+  }
+  if (el.id === 'modale-correction') masquerBoutonCorrection();
+}
+
+/* Echap ferme la fenetre du dessus, pas la pile entiere : depuis la correction,
+   on revient a la lecture, on n'en est pas ejecte. */
+function fermerDerniereModale() {
+  const ouvertes = $$('.voile.ouvert');
+  if (ouvertes.length) fermerModale(ouvertes[ouvertes.length - 1]);
+}
+
+
+/* ------------------------------------------------------- Theme et zoom */
 
 function appliquerTheme(mode) {
   if (mode === 'auto') document.documentElement.removeAttribute('data-theme');
@@ -713,14 +1259,16 @@ function appliquerTheme(mode) {
 }
 
 function themeSuivant() {
-  /* Bascule sur le thème réellement affiché : l'ancien cycle auto -> clair -> sombre
-     produisait un clic sans effet visible quand « clair » coïncidait avec le système. */
+  /* Bascule sur le theme reellement affiche : l'ancien cycle auto -> clair -> sombre
+     produisait un clic sans effet visible quand « clair » coincidait avec le systeme. */
   const affiche = document.documentElement.getAttribute('data-theme')
     || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'sombre' : 'clair');
   const suivant = affiche === 'sombre' ? 'clair' : 'sombre';
   appliquerTheme(suivant);
   enregistrer({ theme: suivant });
-  journaliser('info', 'Thème : ' + suivant);
+  journaliser('info', t('ui.journal.theme', {
+    theme: t(suivant === 'sombre' ? 'ui.theme.sombre' : 'ui.theme.clair'),
+  }));
 }
 
 function appliquerZoom(valeur) {
@@ -728,9 +1276,14 @@ function appliquerZoom(valeur) {
   document.body.style.zoom = etat.config.zoom;
 }
 
-/* ------------------------------------------------------------ Câblage UI */
+/* ------------------------------------------------------------ Cablage UI */
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Langue provisoire, le temps que Python reponde : celle du dernier
+  // lancement, sinon celle du navigateur integre. Evite une fenetre vide.
+  definirLangue(langueProvisoire());
+  traduirePage();
+
   dessinerFile();
   dessinerHistorique();
 
@@ -743,7 +1296,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#btn-aide').addEventListener('click', () => ouvrirModale('#modale-aide'));
   $('#btn-ouvrir-app').addEventListener('click', () => pywebview.api.ouvrir_dossier_application());
 
-  // Dépôt de fichiers. Le chemin réel est récupéré côté Python : un navigateur
+  // Depot de fichiers. Le chemin reel est recupere cote Python : un navigateur
   // ne le communique jamais au JavaScript.
   const zone = $('#zone-depot');
   zone.addEventListener('click', () => pywebview.api.ajouter_fichiers());
@@ -776,8 +1329,73 @@ document.addEventListener('DOMContentLoaded', () => {
     majBoutons();
   });
 
-  // Réglages simples
-  $('#langue').addEventListener('change', (e) => enregistrer({ langue: e.target.value }));
+  // Reglages simples
+  $('#langue').addEventListener('change', (e) => {
+    enregistrer({ langue: e.target.value });
+    majQualiteLangue();
+  });
+
+  // Langue de l'interface : sans effet sur la langue parlee ci-dessus.
+  $('#langue-interface').addEventListener('change', (e) => {
+    changerLangueInterface(e.target.value);
+  });
+
+  // Nom des fichiers produits : apercu pendant la frappe, enregistrement quand
+  // le champ est quitte ou valide.
+  $('#motif-sortie').addEventListener('input', () => {
+    clearTimeout(minuteurMotif);
+    minuteurMotif = setTimeout(majApercuMotif, 150);
+  });
+  $('#motif-sortie').addEventListener('change', enregistrerMotif);
+  $('#motif-sortie').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+  });
+
+  // Dossier surveille
+  $('#opt-surveillance').addEventListener('change', (e) => {
+    if (e.target.checked && !$('#dossier-surveille').value) {
+      // Rien a surveiller encore : on ouvre directement le selecteur.
+      $('#bloc-surveillance').style.display = 'block';
+      pywebview.api.choisir_dossier_surveille();
+      return;
+    }
+    appliquerSurveillance(e.target.checked);
+  });
+  $('#btn-dossier-surveille').addEventListener('click', () =>
+    pywebview.api.choisir_dossier_surveille());
+  $('#btn-ouvrir-surveille').addEventListener('click', () =>
+    pywebview.api.ouvrir_dossier_surveille());
+  $('#btn-oublier-surveilles').addEventListener('click', async () => {
+    const r = await pywebview.api.oublier_fichiers_surveilles();
+    retourSurveillance(r);
+  });
+
+  // Espace utilise
+  $('#btn-stockage').addEventListener('click', () => {
+    $('#contenu-stockage').innerHTML =
+      `<p style="color:var(--texte-faible)">${ech(t('ui.stockage.mesure'))}</p>`;
+    ouvrirModale('#modale-stockage');
+    pywebview.api.mesurer_stockage();
+  });
+
+  // Verification de mise a jour et barre des taches
+  $('#opt-maj').addEventListener('change', async (e) => {
+    await enregistrer({ maj_verifier: e.target.checked });
+    $('#retour-maj').innerHTML = encartInfo(
+      t(e.target.checked ? 'ui.maj.activee' : 'ui.maj.coupee'));
+    setTimeout(() => { $('#retour-maj').innerHTML = ''; }, 10000);
+    if (e.target.checked) pywebview.api.verifier_maj(true);
+    else { $('#bandeau-maj').style.display = 'none'; etat.maj = null; }
+  });
+  $('#opt-barre-taches').addEventListener('change', (e) =>
+    enregistrer({ barre_taches: e.target.checked }));
+  $('#btn-maj-page').addEventListener('click', () => {
+    if (etat.maj && etat.maj.url) pywebview.api.ouvrir_lien(etat.maj.url);
+  });
+  $('#btn-maj-fermer').addEventListener('click', () => {
+    $('#bandeau-maj').style.display = 'none';
+  });
+
   $('#btn-dossier').addEventListener('click', () => pywebview.api.choisir_dossier_sortie());
   $('#btn-ouvrir-dossier').addEventListener('click', () => pywebview.api.ouvrir_dossier_sortie());
 
@@ -789,7 +1407,7 @@ document.addEventListener('DOMContentLoaded', () => {
     $(s).addEventListener('change', () => {
       if (!$('#fmt-txt').checked && !$('#fmt-srt').checked && !$('#fmt-vtt').checked) {
         $('#fmt-txt').checked = true;
-        journaliser('attention', 'Au moins un format de sortie doit rester coché.');
+        journaliser('attention', t('ui.format.un_minimum'));
       }
       enregistrer({ formats: formats() });
     });
@@ -809,7 +1427,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#nb-locuteurs').addEventListener('change', (e) =>
     enregistrer({ nb_locuteurs: parseInt(e.target.value, 10) || 0 }));
 
-  // Dossier des modèles
+  // Dossier des modeles
   $('#btn-dossier-modeles').addEventListener('click', () => {
     $('#retour-modeles').innerHTML = '';
     pywebview.api.choisir_dossier_modeles();
@@ -817,7 +1435,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#btn-ouvrir-modeles').addEventListener('click', () =>
     pywebview.api.ouvrir_dossier_modeles());
 
-  // Import et export des données personnelles
+  // Import et export des donnees personnelles
   $('#btn-exporter-donnees').addEventListener('click', () => {
     $('#retour-donnees').innerHTML = '';
     pywebview.api.exporter_donnees();
@@ -858,7 +1476,7 @@ document.addEventListener('DOMContentLoaded', () => {
     majGlossaire(resume);
     $('#retour-glossaire').innerHTML = resume.tronque
       ? encartAttention(resume.message) : encartSucces(resume.message);
-    journaliser('ok', 'Glossaire enregistré. ' + resume.message);
+    journaliser('ok', t('ui.voc.glossaire_enregistre', { message: resume.message }));
     setTimeout(() => fermerModale($('#modale-glossaire')), 700);
   });
 
@@ -873,9 +1491,89 @@ document.addEventListener('DOMContentLoaded', () => {
     majCorrections(r);
     $('#retour-corrections').innerHTML = r.erreurs.length
       ? r.erreurs.map(encartAttention).join('')
-      : encartSucces(r.nb + ' règle(s) enregistrée(s).');
-    journaliser('ok', r.nb + ' règle(s) de correction enregistrée(s).');
+      : encartSucces(t('ui.voc.regles_enregistrees', { n: r.nb }));
+    journaliser('ok', t('ui.voc.regles_enregistrees', { n: r.nb }));
     if (!r.erreurs.length) setTimeout(() => fermerModale($('#modale-corrections')), 700);
+  });
+
+  // Relecture
+  $('#opt-compagnon').addEventListener('change', (e) =>
+    enregistrer({ compagnon_confiance: e.target.checked }));
+  $('#opt-apprises').addEventListener('change', (e) =>
+    enregistrer({ corrections_apprises: e.target.checked }));
+  $('#opt-sauvegarde').addEventListener('change', (e) =>
+    enregistrer({ sauvegarde_progressive: e.target.checked }));
+  $('#opt-lecture-audio').addEventListener('change', (e) => {
+    enregistrer({ lecture_audio: e.target.checked });
+    if (etat.lecture) { etat.lecture.lecture_audio = e.target.checked; dessinerLecture(); }
+  });
+
+  // Gabarit d'instructions pour l'IA
+  $('#btn-gabarit').addEventListener('click', async () => {
+    const g = await pywebview.api.lire_gabarit();
+    $('#zone-gabarit').value = g.contenu || '';
+    $('#retour-gabarit').innerHTML = encartInfo(t('ui.gabarit.fichier', { chemin: g.chemin }));
+    ouvrirModale('#modale-gabarit');
+  });
+  $('#btn-enregistrer-gabarit').addEventListener('click', async () => {
+    const r = await pywebview.api.sauver_gabarit($('#zone-gabarit').value);
+    $('#retour-gabarit').innerHTML = encartSucces(r.message);
+    journaliser('ok', t('ui.gabarit.enregistre'));
+    setTimeout(() => fermerModale($('#modale-gabarit')), 700);
+  });
+
+  // Vue de lecture
+  $('#btn-ouvrir-lecture').addEventListener('click', () => {
+    if (etat.lecture) pywebview.api.ouvrir(etat.lecture.chemin);
+  });
+  $('#btn-copier-lecture').addEventListener('click', async () => {
+    await copier(texteLecture());
+    retourLecture(t('ui.lecture.texte_copie'), 'ok');
+    journaliser('ok', t('ui.lecture.texte_copie_journal'));
+  });
+  $('#btn-copier-ia').addEventListener('click', async () => {
+    if (!etat.lecture) return;
+    const bouton = $('#btn-copier-ia');
+    bouton.disabled = true;
+    try {
+      const r = await pywebview.api.copier_pour_ia(etat.lecture.chemin);
+      if (!r.ok) {
+        retourLecture(r.message || t('ui.lecture.copie_impossible'), 'erreur');
+        return;
+      }
+      retourLecture(t('ui.lecture.ia_copie'), 'ok');
+      journaliser('ok', r.message);
+    } catch (e) {
+      console.error(e);
+      retourLecture(t('ui.lecture.copie_impossible'), 'erreur');
+    } finally {
+      bouton.disabled = false;
+    }
+  });
+
+  // Confiance au survol, correction sur selection : un seul ecouteur pour tout
+  // le texte, quel que soit le nombre de mots affiches.
+  $('#lecture-texte').addEventListener('mouseover', infobulleMot);
+  $('#lecture-texte').addEventListener('mouseup', () => setTimeout(positionnerBoutonCorrection, 0));
+  $('#lecture-texte').addEventListener('keyup', () => setTimeout(positionnerBoutonCorrection, 0));
+  $('#modale-lecture .modale-corps').addEventListener('scroll', masquerBoutonCorrection);
+  $('#btn-corriger-selection').addEventListener('mousedown', (e) => e.preventDefault());
+  $('#btn-corriger-selection').addEventListener('click', ouvrirCorrection);
+  $('#correction-cible').addEventListener('input', majQuestionRegle);
+  $('#correction-cible').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); appliquerCorrection(); }
+  });
+  $('#btn-appliquer-correction').addEventListener('click', appliquerCorrection);
+
+  // Ecoute de l'extrait correspondant au paragraphe clique.
+  $('#lecture-texte').addEventListener('click', (e) => {
+    const son = $('#lecture-son');
+    const para = e.target.closest ? e.target.closest('.lecture-para') : null;
+    if (!son || !para) return;
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed) return;   // l'utilisateur selectionne
+    son.currentTime = parseFloat(para.dataset.debut || '0') || 0;
+    son.play().catch(() => { /* pas de lecture possible, sans consequence */ });
   });
 
   // Jeton Hugging Face
@@ -884,8 +1582,8 @@ document.addEventListener('DOMContentLoaded', () => {
     $('#etat-diarisation-modale').innerHTML = d.disponible ? '' :
       encartAttention(d.indisponibilite);
 
-    // Version installée sans PyTorch : le jeton ne servirait à rien, on masque
-    // toute la procédure et on renvoie vers la version source.
+    // Version installee sans PyTorch : le jeton ne servirait a rien, on masque
+    // toute la procedure et on renvoie vers la version source.
     const inutile = !d.disponible && etat.versionInstallee;
     $('#bloc-procedure-jeton').style.display = inutile ? 'none' : 'block';
     $('#bloc-source-locuteurs').style.display = inutile ? 'block' : 'none';
@@ -916,11 +1614,11 @@ document.addEventListener('DOMContentLoaded', () => {
     await pywebview.api.enregistrer_jeton('');
     etat.diarisation.jeton_present = false;
     $('#champ-jeton').value = '';
-    $('#retour-jeton').innerHTML = encartInfo('Jeton effacé.');
+    $('#retour-jeton').innerHTML = encartInfo(t('ui.modale.jeton.efface'));
     majDiarisation();
   });
 
-  // Aperçu
+  // Apercu
   $('#btn-ouvrir-apercu').addEventListener('click', () => {
     if (etat.apercuChemin) pywebview.api.ouvrir(etat.apercuChemin);
   });
@@ -928,7 +1626,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const texte = $('#contenu-apercu').textContent;
     try { await navigator.clipboard.writeText(texte); }
     catch (e) { pywebview.api.copier(texte); }
-    journaliser('ok', 'Texte copié dans le presse-papiers.');
+    journaliser('ok', t('ui.apercu.copie'));
   });
 
   // Journal
@@ -946,7 +1644,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#btn-arreter').addEventListener('click', () => {
     pywebview.api.arreter();
     $('#btn-arreter').disabled = true;
-    setEtat('Arrêt en cours...', '');
+    setEtat(t('ui.etat.arret'), '');
   });
 
   // Modales : fermeture
@@ -956,11 +1654,23 @@ document.addEventListener('DOMContentLoaded', () => {
   $$('.voile').forEach((v) => {
     v.addEventListener('mousedown', (e) => { if (e.target === v) fermerModale(v); });
   });
+  document.addEventListener('mousedown', (e) => {
+    if (!e.target.closest || !e.target.closest('#btn-corriger-selection')) masquerBoutonCorrection();
+  });
 
-  // Raccourcis
+  // Raccourcis. Trois utiles, et rien de plus : parcourir, lancer, fermer.
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { fermerToutesModales(); return; }
-    if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); lancer(); }
+    if (e.key === 'Escape') { fermerDerniereModale(); return; }
+    const modaleOuverte = !!$('.voile.ouvert');
+    if (e.ctrlKey && (e.key === 'o' || e.key === 'O')) {
+      e.preventDefault();
+      if (!modaleOuverte) pywebview.api.ajouter_fichiers();
+      return;
+    }
+    if (e.ctrlKey && e.key === 'Enter') {
+      e.preventDefault();
+      if (!modaleOuverte && !$('#btn-lancer').disabled) lancer();
+    }
     if (e.ctrlKey && (e.key === '+' || e.key === '=')) { e.preventDefault(); zoom(0.1); }
     if (e.ctrlKey && e.key === '-') { e.preventDefault(); zoom(-0.1); }
     if (e.ctrlKey && e.key === '0') { e.preventDefault(); appliquerZoom(1); enregistrer({ zoom: 1 }); }
@@ -994,10 +1704,7 @@ async function lancer() {
   }
   etat.enCours = true;
   majBoutons();
-  setEtat('Démarrage...', 'actif');
-  if (!$('#journal-contenu').classList.contains('ouvert')) {
-    // Le détail reste replié : l'état lisible suffit en façade.
-  }
+  setEtat(t('ui.etat.demarrage'), 'actif');
 }
 
 function encartInfo(m) {

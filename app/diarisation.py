@@ -20,7 +20,7 @@ from typing import Callable
 import numpy as np
 
 from . import URL_PROJET as _URL_DEPOT
-from . import chemins, journal
+from . import chemins, journal, langues
 from .journal import ErreurLisible
 
 # Dépôts essayés dans l'ordre. Le premier est la référence stable, le second
@@ -72,24 +72,11 @@ def indisponibilite() -> str:
         # La version installée ne contient pas PyTorch : il pèse à lui seul plus
         # de 2,5 Go, ce qui ferait passer le programme d'installation de 200 Mo à
         # près de 3 Go pour une fonction facultative.
-        return (
-            "La séparation des locuteurs n'est pas incluse dans la version installée. "
-            "Elle repose sur PyTorch, environ 2,5 Go de composants supplémentaires. "
-            "Elle reste disponible dans la version source du projet, voir la section "
-            "« Séparation des locuteurs » du fichier README. Tout le reste de "
-            "l'application fonctionne normalement."
-        )
+        return langues.t("diar.indispo.installee")
 
     if not torch_present():
-        return (
-            "PyTorch n'est pas installé. Relancez « installer.bat » et répondez oui à "
-            "la question sur la séparation des locuteurs, ou lancez "
-            "« installer.bat --locuteurs »."
-        )
-    return (
-        "La bibliothèque pyannote.audio n'est pas installée. Relancez "
-        "« installer.bat --locuteurs »."
-    )
+        return langues.t("diar.indispo.torch")
+    return langues.t("diar.indispo.pyannote")
 
 
 def jeton() -> str:
@@ -133,7 +120,8 @@ def _charger_pipeline(cle: str, signaler: Callable[[str, str], None] | None):
     for depot in DEPOTS:
         try:
             if signaler:
-                signaler("info", f"Chargement du modèle de locuteurs ({depot.split('/')[-1]})...")
+                signaler("info", langues.t(
+                    "diar.chargement", depot=depot.split("/")[-1]))
             with journal.SortieMuette("chargement pyannote"):
                 pipeline = Pipeline.from_pretrained(
                     depot,
@@ -144,9 +132,8 @@ def _charger_pipeline(cle: str, signaler: Callable[[str, str], None] | None):
                 journal.info("Diarisation : dépôt %s chargé", depot)
                 return pipeline
             dernier = ErreurLisible(
-                "Modèle de locuteurs inaccessible",
-                f"Le dépôt {depot} n'a rien renvoyé, généralement parce que ses "
-                "conditions d'utilisation n'ont pas été acceptées avec ce compte.",
+                langues.t("diar.inaccessible.titre"),
+                langues.t("diar.inaccessible.depot", depot=depot),
             )
         except Exception as exc:
             journal.attention("Dépôt %s indisponible : %s", depot, exc)
@@ -155,8 +142,8 @@ def _charger_pipeline(cle: str, signaler: Callable[[str, str], None] | None):
     if dernier is not None:
         raise dernier
     raise ErreurLisible(
-        "Modèle de locuteurs inaccessible",
-        "Aucun dépôt pyannote n'a pu être chargé.",
+        langues.t("diar.inaccessible.titre"),
+        langues.t("diar.inaccessible.aucun"),
     )
 
 
@@ -175,14 +162,13 @@ def diariser(
     """
     manque = indisponibilite()
     if manque:
-        raise ErreurLisible("Séparation des locuteurs indisponible", manque)
+        raise ErreurLisible(langues.t("diar.indisponible.titre"), manque)
 
     cle = jeton()
     if not cle:
         raise ErreurLisible(
-            "Jeton Hugging Face manquant",
-            "La séparation des locuteurs a besoin d'un jeton gratuit. Ouvrez le "
-            "panneau « Locuteurs » : la marche à suivre y est détaillée en trois étapes.",
+            langues.t("diar.jeton_manquant.titre"),
+            langues.t("diar.jeton_manquant.msg"),
         )
 
     import torch
@@ -204,7 +190,7 @@ def diariser(
         arguments["num_speakers"] = int(nb_locuteurs)
 
     if signaler:
-        signaler("info", "Analyse des voix en cours...")
+        signaler("info", langues.t("diar.analyse"))
 
     try:
         with journal.SortieMuette("diarisation"):
@@ -225,7 +211,7 @@ def diariser(
         tours.append({
             "debut": float(periode.start),
             "fin": float(periode.end),
-            "locuteur": f"Locuteur {etiquettes[etiquette]}",
+            "locuteur": langues.t("diar.locuteur", n=etiquettes[etiquette]),
         })
 
     tours.sort(key=lambda t: t["debut"])
@@ -270,10 +256,8 @@ def guide() -> dict:
         "version_installee": chemins.EST_GELE,
         "fichier_jeton": str(chemins.FICHIER_JETON_HF),
         "etapes": [
-            "Créez un compte gratuit sur huggingface.co, puis ouvrez la page du modèle "
-            "pyannote/speaker-diarization-3.1 et acceptez ses conditions d'utilisation.",
-            "Dans les réglages du compte, créez un jeton d'accès de type « Read ».",
-            "Collez le jeton dans le champ ci-dessous. Il est enregistré dans le "
-            "fichier « jeton_hf.txt » de vos données personnelles, et n'est jamais versionné.",
+            langues.t("diar.guide.etape1"),
+            langues.t("diar.guide.etape2"),
+            langues.t("diar.guide.etape3"),
         ],
     }

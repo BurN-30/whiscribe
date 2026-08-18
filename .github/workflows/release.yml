@@ -6,6 +6,20 @@
 #   - « Run workflow » depuis l'onglet Actions : construit et vérifie tout,
 #     dépose les fichiers en artefacts, mais ne publie rien. C'est ce qui
 #     permet d'essayer la chaîne sans poser de tag.
+#
+# MARQUEUR [reinstallation-requise]
+# ---------------------------------
+# Les notes de version sont la section correspondante de CHANGELOG.md, et elles
+# deviennent le corps (body) de la Release. L'application, quand l'utilisateur a
+# activé la vérification des mises à jour, relit ce corps : s'il contient
+#
+#     [reinstallation-requise]
+#
+# le bandeau affiché dans l'application annonce qu'il faut désinstaller puis
+# réinstaller, au lieu de proposer une installation par-dessus. Réservé aux
+# versions qui ne peuvent vraiment pas se mettre à jour en place. Les données et
+# les modèles vivent hors du dossier du programme et survivent de toute façon.
+# Écrire le marqueur dans la section du CHANGELOG suffit à le propager.
 name: Publication
 
 on:

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,7 +8,7 @@
 </head>
 <body>
 
-<!-- Bibliothèque d'icônes, réutilisées par référence. -->
+<!-- Bibliotheque d'icones, reutilisees par reference. -->
 <svg style="display:none" aria-hidden="true">
   <symbol id="i-onde" viewBox="0 0 24 24"><path d="M2 12h2M7 6v12M12 3v18M17 7v10M22 12h-2"/></symbol>
   <symbol id="i-cadenas" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
@@ -33,6 +33,12 @@
   <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 3v12M12 3 8 7M12 3l4 4"/><path d="M4 15v3.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V15"/></symbol>
   <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 15V3M12 15l-4-4M12 15l4-4"/><path d="M4 15v3.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V15"/></symbol>
   <symbol id="i-externe" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8.5 8.5"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></symbol>
+  <symbol id="i-loupe" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+  <symbol id="i-copie" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="12" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></symbol>
+  <symbol id="i-etincelle" viewBox="0 0 24 24"><path d="M12 3.5 13.9 9 19.5 11 13.9 13 12 18.5 10.1 13 4.5 11 10.1 9z"/><path d="M18.5 16.5 19.2 18.3 21 19l-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></symbol>
+  <symbol id="i-crayon" viewBox="0 0 24 24"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17z"/><path d="M14.5 6.5l3 3"/></symbol>
+  <symbol id="i-reprise" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4.5V10h5.5"/></symbol>
+  <symbol id="i-langue" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.2 9.5h17.6M3.2 14.5h17.6"/><path d="M12 3c2.4 2.6 3.6 5.6 3.6 9s-1.2 6.4-3.6 9c-2.4-2.6-3.6-5.6-3.6-9S9.6 5.6 12 3z"/></symbol>
 </svg>
 
 <header class="entete">
@@ -41,31 +47,53 @@
     <h1>WhiScribe</h1>
     <span class="version" id="version"></span>
   </div>
-  <span class="confidentialite" title="Aucune donnée ne quitte cette machine">
+  <span class="confidentialite" data-i18n-title="ui.entete.local_titre">
     <svg class="icone-s icone"><use href="#i-cadenas"></use></svg>
-    100 % local
+    <span data-i18n="ui.entete.local"></span>
+  </span>
+  <span class="veille" id="indic-surveillance" style="display:none" title="">
+    <svg class="icone-s icone"><use href="#i-dossier"></use></svg>
+    <span id="indic-surveillance-texte"></span>
   </span>
   <span class="pousse"></span>
-  <button class="bouton-icone" id="btn-theme" title="Changer de thème" aria-label="Changer de thème">
+  <button class="bouton-icone" id="btn-theme"
+          data-i18n-title="ui.entete.theme" data-i18n-aria="ui.entete.theme">
     <svg class="icone"><use href="#i-theme"></use></svg>
   </button>
-  <button class="bouton-icone" id="btn-aide" title="Aide" aria-label="Aide">
+  <button class="bouton-icone" id="btn-aide"
+          data-i18n-title="ui.entete.aide" data-i18n-aria="ui.entete.aide">
     <svg class="icone"><use href="#i-aide"></use></svg>
   </button>
 </header>
+
+<!-- Mise a jour disponible. Masque tant que rien n'a ete trouve, et rien n'est
+     cherche tant que l'utilisateur n'a pas active la verification. -->
+<div class="bandeau-maj" id="bandeau-maj" style="display:none">
+  <svg class="icone-s icone"><use href="#i-info"></use></svg>
+  <span id="bandeau-maj-texte"></span>
+  <span class="pousse"></span>
+  <button class="bouton" id="btn-maj-page">
+    <svg class="icone-s icone"><use href="#i-externe"></use></svg>
+    <span data-i18n="ui.maj.voir"></span>
+  </button>
+  <button class="bouton-icone" id="btn-maj-fermer"
+          data-i18n-title="ui.maj.masquer" data-i18n-aria="ui.maj.masquer">
+    <svg class="icone"><use href="#i-croix"></use></svg>
+  </button>
+</div>
 
 <main class="corps">
 
   <!-- ============================ Colonne principale ==================== -->
   <section class="colonne colonne-principale">
 
-    <!-- Matériel -->
+    <!-- Materiel -->
     <div class="carte">
       <div class="materiel" id="materiel-entete" role="button" tabindex="0"
            aria-expanded="false" aria-controls="materiel-detail">
         <svg class="icone puce"><use href="#i-puce"></use></svg>
         <div class="contenu">
-          <div class="resume" id="materiel-resume">Analyse du matériel...</div>
+          <div class="resume" id="materiel-resume" data-i18n="ui.materiel.analyse"></div>
           <div class="conseil" id="materiel-conseil"></div>
         </div>
         <svg class="icone chevron" id="materiel-chevron"><use href="#i-chevron"></use></svg>
@@ -73,26 +101,30 @@
       <div class="materiel-detail" id="materiel-detail"></div>
     </div>
 
-    <!-- Dépôt -->
+    <!-- Depot -->
     <div class="zone-depot" id="zone-depot" role="button" tabindex="0">
       <svg class="icone" style="width:32px;height:32px"><use href="#i-depot"></use></svg>
-      <div class="principal">Glissez vos enregistrements ici</div>
-      <div class="secondaire">ou cliquez pour parcourir vos fichiers</div>
-      <div class="formats">m4a, mp3, wav, ogg, flac, opus, webm, wma, et les vidéos courantes</div>
+      <div class="principal" data-i18n="ui.depot.principal"></div>
+      <div class="secondaire" data-i18n="ui.depot.secondaire"></div>
+      <div class="formats" data-i18n="ui.depot.formats"></div>
     </div>
+
+    <!-- Transcriptions interrompues, proposees a la reprise -->
+    <div id="bloc-reprises"></div>
 
     <!-- File et historique -->
     <div class="carte" style="flex:1;display:flex;flex-direction:column;min-height:220px">
       <div class="onglets" role="tablist">
         <button class="onglet" role="tab" id="onglet-file" aria-selected="true" aria-controls="vue-file">
-          File d'attente <span class="compteur" id="compteur-file">0</span>
+          <span data-i18n="ui.onglet.file"></span> <span class="compteur" id="compteur-file">0</span>
         </button>
         <button class="onglet" role="tab" id="onglet-historique" aria-selected="false" aria-controls="vue-historique">
-          Transcriptions <span class="compteur" id="compteur-historique">0</span>
+          <span data-i18n="ui.onglet.historique"></span> <span class="compteur" id="compteur-historique">0</span>
         </button>
         <span class="pousse"></span>
         <button class="bouton-discret bouton" id="btn-vider" style="margin:4px 6px">
-          <svg class="icone-s icone"><use href="#i-corbeille"></use></svg> Vider
+          <svg class="icone-s icone"><use href="#i-corbeille"></use></svg>
+          <span data-i18n="ui.bouton.vider"></span>
         </button>
       </div>
       <div class="liste" id="vue-file" role="tabpanel" style="overflow-y:auto;flex:1"></div>
@@ -101,69 +133,106 @@
 
   </section>
 
-  <!-- ============================== Réglages ============================ -->
+  <!-- ============================== Reglages ============================ -->
   <aside class="colonne colonne-laterale">
 
     <div class="bloc-reglage">
-      <span class="titre-section">Qualité de transcription</span>
+      <span class="titre-section" data-i18n="ui.section.qualite"></span>
       <div class="presets" id="presets"></div>
       <div id="avertissements" style="margin-top:10px"></div>
     </div>
 
     <div class="bloc-reglage">
-      <span class="titre-section">Langue et sortie</span>
+      <span class="titre-section" data-i18n="ui.section.langue_sortie"></span>
       <div class="champ">
-        <label for="langue">Langue parlée</label>
+        <label for="langue" data-i18n="ui.champ.langue_parlee"></label>
         <select id="langue">
-          <option value="fr">Français</option>
-          <option value="en">Anglais</option>
-          <option value="es">Espagnol</option>
-          <option value="de">Allemand</option>
-          <option value="it">Italien</option>
-          <option value="nl">Néerlandais</option>
-          <option value="pt">Portugais</option>
-          <option value="pl">Polonais</option>
-          <option value="ro">Roumain</option>
-          <option value="ar">Arabe</option>
-          <option value="auto">Détection automatique</option>
+          <option value="fr" data-i18n="ui.langue.fr"></option>
+          <option value="en" data-i18n="ui.langue.en"></option>
+          <option value="es" data-i18n="ui.langue.es"></option>
+          <option value="de" data-i18n="ui.langue.de"></option>
+          <option value="it" data-i18n="ui.langue.it"></option>
+          <option value="nl" data-i18n="ui.langue.nl"></option>
+          <option value="pt" data-i18n="ui.langue.pt"></option>
+          <option value="pl" data-i18n="ui.langue.pl"></option>
+          <option value="ro" data-i18n="ui.langue.ro"></option>
+          <option value="ar" data-i18n="ui.langue.ar"></option>
+          <option value="auto" data-i18n="ui.langue.auto"></option>
         </select>
+        <span class="aide" id="qualite-langue"></span>
       </div>
       <div class="champ">
-        <label for="dossier-sortie">Dossier de sortie</label>
+        <label for="dossier-sortie" data-i18n="ui.champ.dossier_sortie"></label>
         <div class="ligne-champ">
           <input type="text" id="dossier-sortie" readonly>
-          <button class="bouton" id="btn-dossier" title="Choisir un dossier">
+          <button class="bouton" id="btn-dossier" data-i18n-title="ui.titre.choisir_dossier">
             <svg class="icone-s icone"><use href="#i-dossier"></use></svg>
           </button>
-          <button class="bouton" id="btn-ouvrir-dossier" title="Ouvrir le dossier">
+          <button class="bouton" id="btn-ouvrir-dossier" data-i18n-title="ui.titre.ouvrir_dossier">
             <svg class="icone-s icone"><use href="#i-externe"></use></svg>
           </button>
         </div>
       </div>
       <div class="champ">
-        <label>Formats produits</label>
+        <label for="motif-sortie" data-i18n="ui.champ.motif"></label>
+        <input type="text" id="motif-sortie" spellcheck="false" placeholder="{date}-{nom}">
+        <span class="aide apercu-motif" id="apercu-motif"></span>
+        <span class="aide" data-i18n-html="ui.aide.motif"></span>
+      </div>
+      <div class="champ">
+        <label data-i18n="ui.champ.formats"></label>
         <div class="cases">
-          <label class="case"><input type="checkbox" id="fmt-txt" checked> Texte (.txt)</label>
-          <label class="case"><input type="checkbox" id="fmt-srt"> Sous-titres (.srt)</label>
-          <label class="case"><input type="checkbox" id="fmt-vtt"> Sous-titres (.vtt)</label>
+          <label class="case"><input type="checkbox" id="fmt-txt" checked> <span data-i18n="ui.format.txt"></span></label>
+          <label class="case"><input type="checkbox" id="fmt-srt"> <span data-i18n="ui.format.srt"></span></label>
+          <label class="case"><input type="checkbox" id="fmt-vtt"> <span data-i18n="ui.format.vtt"></span></label>
         </div>
         <label class="case" style="margin-top:6px">
-          <input type="checkbox" id="fmt-horodatage"> Horodater chaque paragraphe du texte
+          <input type="checkbox" id="fmt-horodatage"> <span data-i18n="ui.format.horodatage"></span>
         </label>
       </div>
     </div>
 
     <div class="bloc-reglage">
-      <span class="titre-section">Vocabulaire</span>
-      <p class="aide" style="font-size:12.5px;color:var(--texte-doux);margin-bottom:10px">
-        Les noms propres, sociétés et termes anglais sont ce que la transcription
-        écorche le plus. Deux réglages y répondent.
-      </p>
+      <span class="titre-section" data-i18n="ui.section.veille"></span>
+      <label class="bascule">
+        <input type="checkbox" id="opt-surveillance">
+        <span class="piste"></span>
+        <span>
+          <span class="libelle" data-i18n="ui.veille.bascule"></span><br>
+          <span class="sous-libelle" id="etat-surveillance"></span>
+        </span>
+      </label>
+      <div id="bloc-surveillance" style="display:none;margin-top:10px">
+        <div class="champ">
+          <label for="dossier-surveille" data-i18n="ui.veille.champ"></label>
+          <div class="ligne-champ">
+            <input type="text" id="dossier-surveille" readonly>
+            <button class="bouton" id="btn-dossier-surveille" data-i18n-title="ui.titre.choisir_dossier">
+              <svg class="icone-s icone"><use href="#i-dossier"></use></svg>
+            </button>
+            <button class="bouton" id="btn-ouvrir-surveille" data-i18n-title="ui.titre.ouvrir_dossier">
+              <svg class="icone-s icone"><use href="#i-externe"></use></svg>
+            </button>
+          </div>
+        </div>
+        <button class="bouton bouton-discret" id="btn-oublier-surveilles" style="width:100%">
+          <svg class="icone-s icone"><use href="#i-reprise"></use></svg>
+          <span data-i18n="ui.veille.reprendre_tout"></span>
+        </button>
+      </div>
+      <span class="aide" data-i18n="ui.aide.veille"></span>
+      <div id="retour-surveillance"></div>
+    </div>
+
+    <div class="bloc-reglage">
+      <span class="titre-section" data-i18n="ui.section.vocabulaire"></span>
+      <p class="aide" style="font-size:12.5px;color:var(--texte-doux);margin-bottom:10px"
+         data-i18n="ui.aide.vocabulaire"></p>
       <label class="bascule">
         <input type="checkbox" id="opt-glossaire" checked>
         <span class="piste"></span>
         <span>
-          <span class="libelle">Souffler le glossaire au modèle</span><br>
+          <span class="libelle" data-i18n="ui.voc.glossaire"></span><br>
           <span class="sous-libelle" id="etat-glossaire">--</span>
         </span>
       </label>
@@ -171,82 +240,167 @@
         <input type="checkbox" id="opt-corrections" checked>
         <span class="piste"></span>
         <span>
-          <span class="libelle">Appliquer les corrections</span><br>
+          <span class="libelle" data-i18n="ui.voc.corrections"></span><br>
           <span class="sous-libelle" id="etat-corrections">--</span>
         </span>
       </label>
       <div style="display:flex;gap:8px;margin-top:10px">
         <button class="bouton" id="btn-glossaire" style="flex:1">
-          <svg class="icone-s icone"><use href="#i-livre"></use></svg> Glossaire
+          <svg class="icone-s icone"><use href="#i-livre"></use></svg>
+          <span data-i18n="ui.bouton.glossaire"></span>
         </button>
         <button class="bouton" id="btn-corrections" style="flex:1">
-          <svg class="icone-s icone"><use href="#i-reglages"></use></svg> Corrections
+          <svg class="icone-s icone"><use href="#i-reglages"></use></svg>
+          <span data-i18n="ui.bouton.corrections"></span>
         </button>
       </div>
     </div>
 
     <div class="bloc-reglage">
-      <span class="titre-section">Locuteurs</span>
+      <span class="titre-section" data-i18n="ui.section.relecture"></span>
+      <p class="aide" style="font-size:12.5px;color:var(--texte-doux);margin-bottom:10px"
+         data-i18n="ui.aide.relecture"></p>
+      <label class="bascule">
+        <input type="checkbox" id="opt-compagnon" checked>
+        <span class="piste"></span>
+        <span>
+          <span class="libelle" data-i18n="ui.relecture.compagnon"></span><br>
+          <span class="sous-libelle" data-i18n="ui.relecture.compagnon_aide"></span>
+        </span>
+      </label>
+      <label class="bascule">
+        <input type="checkbox" id="opt-apprises" checked>
+        <span class="piste"></span>
+        <span>
+          <span class="libelle" data-i18n="ui.relecture.apprises"></span><br>
+          <span class="sous-libelle" data-i18n="ui.relecture.apprises_aide"></span>
+        </span>
+      </label>
+      <label class="bascule">
+        <input type="checkbox" id="opt-sauvegarde" checked>
+        <span class="piste"></span>
+        <span>
+          <span class="libelle" data-i18n="ui.relecture.sauvegarde"></span><br>
+          <span class="sous-libelle" data-i18n="ui.relecture.sauvegarde_aide"></span>
+        </span>
+      </label>
+      <label class="bascule">
+        <input type="checkbox" id="opt-lecture-audio">
+        <span class="piste"></span>
+        <span>
+          <span class="libelle" data-i18n="ui.relecture.audio"></span><br>
+          <span class="sous-libelle" data-i18n="ui.relecture.audio_aide"></span>
+        </span>
+      </label>
+      <button class="bouton" id="btn-gabarit" style="width:100%;margin-top:10px">
+        <svg class="icone-s icone"><use href="#i-etincelle"></use></svg>
+        <span data-i18n="ui.bouton.gabarit"></span>
+      </button>
+      <span class="aide" data-i18n="ui.aide.gabarit"></span>
+    </div>
+
+    <div class="bloc-reglage">
+      <span class="titre-section" data-i18n="ui.section.locuteurs"></span>
       <label class="bascule">
         <input type="checkbox" id="opt-diarisation">
         <span class="piste"></span>
         <span>
-          <span class="libelle">Séparer les locuteurs</span><br>
+          <span class="libelle" data-i18n="ui.loc.bascule"></span><br>
           <span class="sous-libelle" id="etat-diarisation">--</span>
         </span>
       </label>
       <div id="bloc-locuteurs" style="display:none;margin-top:10px">
         <div class="champ">
-          <label for="nb-locuteurs">Nombre de participants</label>
+          <label for="nb-locuteurs" data-i18n="ui.loc.nombre"></label>
           <select id="nb-locuteurs">
-            <option value="0">Détection automatique</option>
+            <option value="0" data-i18n="ui.loc.auto"></option>
             <option value="2">2</option><option value="3">3</option>
             <option value="4">4</option><option value="5">5</option>
             <option value="6">6</option><option value="7">7</option>
             <option value="8">8</option><option value="10">10</option>
           </select>
-          <span class="aide">Préciser le nombre exact améliore nettement le découpage.</span>
+          <span class="aide" data-i18n="ui.aide.locuteurs"></span>
         </div>
       </div>
       <button class="bouton" id="btn-jeton" style="width:100%;margin-top:8px">
         <svg class="icone-s icone"><use href="#i-personnes"></use></svg>
-        <span id="libelle-jeton">Configurer l'accès</span>
+        <span id="libelle-jeton"></span>
       </button>
     </div>
 
     <div class="bloc-reglage">
-      <span class="titre-section">Modèles</span>
+      <span class="titre-section" data-i18n="ui.section.modeles"></span>
       <div class="sous-libelle" id="etat-modeles">--</div>
       <div class="chemin-modeles" id="chemin-modeles" title="">--</div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button class="bouton" id="btn-dossier-modeles" style="flex:1">
-          <svg class="icone-s icone"><use href="#i-dossier"></use></svg> Changer
+          <svg class="icone-s icone"><use href="#i-dossier"></use></svg>
+          <span data-i18n="ui.bouton.changer"></span>
         </button>
-        <button class="bouton" id="btn-ouvrir-modeles" title="Ouvrir le dossier">
+        <button class="bouton" id="btn-ouvrir-modeles" data-i18n-title="ui.titre.ouvrir_dossier">
           <svg class="icone-s icone"><use href="#i-externe"></use></svg>
         </button>
       </div>
+      <button class="bouton" id="btn-stockage" style="width:100%;margin-top:8px">
+        <svg class="icone-s icone"><use href="#i-loupe"></use></svg>
+        <span data-i18n="ui.bouton.stockage"></span>
+      </button>
       <span class="aide" id="aide-modeles"></span>
       <div id="retour-modeles"></div>
     </div>
 
     <div class="bloc-reglage">
-      <span class="titre-section">Mes données</span>
-      <div class="sous-libelle" id="etat-donnees">Glossaire, corrections et réglages</div>
+      <span class="titre-section" data-i18n="ui.section.donnees"></span>
+      <div class="sous-libelle" data-i18n="ui.donnees.etat"></div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button class="bouton" id="btn-exporter-donnees" style="flex:1">
-          <svg class="icone-s icone"><use href="#i-export"></use></svg> Exporter mes données
+          <svg class="icone-s icone"><use href="#i-export"></use></svg>
+          <span data-i18n="ui.bouton.exporter"></span>
         </button>
         <button class="bouton" id="btn-importer-donnees" style="flex:1">
-          <svg class="icone-s icone"><use href="#i-import"></use></svg> Importer des données
+          <svg class="icone-s icone"><use href="#i-import"></use></svg>
+          <span data-i18n="ui.bouton.importer"></span>
         </button>
       </div>
-      <span class="aide">
-        Un seul fichier zip pour sauvegarder votre glossaire professionnel ou le
-        porter sur un autre poste, sans dépôt Git ni service en ligne.
-        Le jeton Hugging Face, les journaux et les modèles n'y sont jamais mis.
-      </span>
+      <span class="aide" data-i18n="ui.aide.donnees"></span>
       <div id="retour-donnees"></div>
+    </div>
+
+    <div class="bloc-reglage">
+      <span class="titre-section" data-i18n="ui.section.application"></span>
+
+      <!-- Langue de l'interface. Sans rapport avec la langue parlee choisie
+           plus haut : celle-ci pilote le moteur, celle-la l'affichage. -->
+      <div class="champ">
+        <label for="langue-interface" data-i18n="ui.champ.langue_interface"></label>
+        <div class="ligne-champ">
+          <svg class="icone-s icone" style="flex:none;opacity:.75"><use href="#i-langue"></use></svg>
+          <select id="langue-interface" style="flex:1">
+            <option value="fr" data-i18n="ui.langue.fr"></option>
+            <option value="en" data-i18n="ui.langue.en"></option>
+          </select>
+        </div>
+        <span class="aide" data-i18n="ui.aide.langue_interface"></span>
+      </div>
+
+      <label class="bascule">
+        <input type="checkbox" id="opt-maj">
+        <span class="piste"></span>
+        <span>
+          <span class="libelle" data-i18n="ui.app.maj"></span><br>
+          <span class="sous-libelle" data-i18n="ui.app.maj_aide"></span>
+        </span>
+      </label>
+      <label class="bascule">
+        <input type="checkbox" id="opt-barre-taches" checked>
+        <span class="piste"></span>
+        <span>
+          <span class="libelle" data-i18n="ui.app.barre"></span><br>
+          <span class="sous-libelle" data-i18n="ui.app.barre_aide"></span>
+        </span>
+      </label>
+      <span class="aide" data-i18n="ui.aide.maj"></span>
+      <div id="retour-maj"></div>
     </div>
 
     <div class="bloc-reglage">
@@ -254,43 +408,46 @@
         <input type="checkbox" id="opt-avance">
         <span class="piste"></span>
         <span>
-          <span class="libelle">Mode avancé</span><br>
-          <span class="sous-libelle">Modèle, faisceau, filtres audio</span>
+          <span class="libelle" data-i18n="ui.avance.bascule"></span><br>
+          <span class="sous-libelle" data-i18n="ui.avance.bascule_aide"></span>
         </span>
       </label>
       <div id="bloc-avance" style="display:none;margin-top:12px">
         <div class="champ">
-          <label for="modele-avance">Modèle</label>
+          <label for="modele-avance" data-i18n="ui.avance.modele"></label>
           <select id="modele-avance"></select>
-          <span class="aide">Vide, c'est le modèle du preset qui s'applique.</span>
+          <span class="aide" data-i18n="ui.avance.modele_aide"></span>
         </div>
         <div class="champ">
-          <label for="beam">Largeur de faisceau <span id="valeur-beam" style="color:var(--texte-faible)"></span></label>
+          <label for="beam">
+            <span data-i18n="ui.avance.beam"></span>
+            <span id="valeur-beam" style="color:var(--texte-faible)"></span>
+          </label>
           <input type="number" id="beam" min="1" max="10" step="1">
-          <span class="aide">Plus large, meilleure qualité, plus lent. 5 à 10 pour les réunions.</span>
+          <span class="aide" data-i18n="ui.avance.beam_aide"></span>
         </div>
         <label class="bascule">
           <input type="checkbox" id="opt-contexte" checked>
           <span class="piste"></span>
           <span>
-            <span class="libelle">Garder le contexte</span><br>
-            <span class="sous-libelle">À couper si le texte se met à boucler</span>
+            <span class="libelle" data-i18n="ui.avance.contexte"></span><br>
+            <span class="sous-libelle" data-i18n="ui.avance.contexte_aide"></span>
           </span>
         </label>
         <label class="bascule">
           <input type="checkbox" id="opt-salle">
           <span class="piste"></span>
           <span>
-            <span class="libelle">Audio de salle</span><br>
-            <span class="sous-libelle">Filtre les basses, normalise le volume</span>
+            <span class="libelle" data-i18n="ui.avance.salle"></span><br>
+            <span class="sous-libelle" data-i18n="ui.avance.salle_aide"></span>
           </span>
         </label>
         <label class="bascule">
           <input type="checkbox" id="opt-processeur">
           <span class="piste"></span>
           <span>
-            <span class="libelle">Forcer le processeur</span><br>
-            <span class="sous-libelle">Contourne un souci de carte graphique</span>
+            <span class="libelle" data-i18n="ui.avance.processeur"></span><br>
+            <span class="sous-libelle" data-i18n="ui.avance.processeur_aide"></span>
           </span>
         </label>
       </div>
@@ -303,22 +460,24 @@
 <footer class="pied">
   <div class="journal-entete" id="journal-entete" role="button" tabindex="0" aria-expanded="false">
     <svg class="icone-s icone chevron"><use href="#i-chevron"></use></svg>
-    <span class="journal-titre">Journal</span>
-    <span class="journal-dernier" id="journal-dernier">Prêt.</span>
-    <button class="bouton-lien" id="btn-fichier-log">Ouvrir le fichier détaillé</button>
+    <span class="journal-titre" data-i18n="ui.pied.journal"></span>
+    <span class="journal-dernier" id="journal-dernier" data-i18n="ui.pied.pret_point"></span>
+    <button class="bouton-lien" id="btn-fichier-log" data-i18n="ui.pied.fichier_detaille"></button>
   </div>
   <div class="journal-contenu" id="journal-contenu"></div>
   <div class="actions">
     <div class="etat-global" id="etat-global">
       <span class="point"></span>
-      <span class="texte" id="etat-texte">Prêt</span>
+      <span class="texte" id="etat-texte" data-i18n="ui.pied.pret"></span>
     </div>
     <span class="pousse"></span>
     <button class="bouton bouton-danger" id="btn-arreter" disabled>
-      <svg class="icone-s icone"><use href="#i-arret"></use></svg> Arrêter
+      <svg class="icone-s icone"><use href="#i-arret"></use></svg>
+      <span data-i18n="ui.bouton.arreter"></span>
     </button>
     <button class="bouton bouton-accent" id="btn-lancer" disabled>
-      <svg class="icone-s icone"><use href="#i-lecture"></use></svg> Lancer la transcription
+      <svg class="icone-s icone"><use href="#i-lecture"></use></svg>
+      <span data-i18n="ui.bouton.lancer"></span>
     </button>
   </div>
 </footer>
@@ -329,30 +488,22 @@
   <div class="modale modale-large">
     <div class="modale-entete">
       <svg class="icone"><use href="#i-livre"></use></svg>
-      <h2>Glossaire de vocabulaire</h2>
+      <h2 data-i18n="ui.modale.glossaire.titre"></h2>
       <button class="bouton-icone" data-fermer><svg class="icone"><use href="#i-croix"></use></svg></button>
     </div>
     <div class="modale-corps">
-      <p>
-        Un terme par ligne : prénoms, noms de sociétés, produits, sigles. Ces mots
-        sont soufflés au modèle avant qu'il ne transcrive, ce qui l'oriente vers
-        la bonne orthographe.
-      </p>
+      <p data-i18n="ui.modale.glossaire.intro"></p>
       <div class="encart encart-info" style="margin-bottom:12px">
         <svg class="icone-s icone"><use href="#i-info"></use></svg>
-        <span>
-          Le modèle n'accepte qu'une amorce courte, 224 jetons au maximum.
-          Placez les termes les plus importants <strong>en haut</strong> de la
-          liste : au-delà de la limite, les suivants sont ignorés.
-        </span>
+        <span data-i18n-html="ui.modale.glossaire.limite"></span>
       </div>
       <textarea id="zone-glossaire" spellcheck="false"></textarea>
       <div id="retour-glossaire" style="margin-top:10px"></div>
     </div>
     <div class="modale-pied">
       <span class="pousse"></span>
-      <button class="bouton" data-fermer>Annuler</button>
-      <button class="bouton bouton-accent" id="btn-enregistrer-glossaire">Enregistrer</button>
+      <button class="bouton" data-fermer data-i18n="ui.bouton.annuler"></button>
+      <button class="bouton bouton-accent" id="btn-enregistrer-glossaire" data-i18n="ui.bouton.enregistrer"></button>
     </div>
   </div>
 </div>
@@ -361,23 +512,18 @@
   <div class="modale modale-large">
     <div class="modale-entete">
       <svg class="icone"><use href="#i-reglages"></use></svg>
-      <h2>Corrections automatiques</h2>
+      <h2 data-i18n="ui.modale.corrections.titre"></h2>
       <button class="bouton-icone" data-fermer><svg class="icone"><use href="#i-croix"></use></svg></button>
     </div>
     <div class="modale-corps">
-      <p>
-        Une règle par ligne, au format <code>forme erronée =&gt; forme correcte</code>.
-        La casse est ignorée et seuls les mots entiers sont remplacés, donc
-        « git » ne touchera pas « digital ». Les corrections sont appliquées au
-        texte final, après la transcription.
-      </p>
+      <p data-i18n-html="ui.modale.corrections.intro"></p>
       <textarea id="zone-corrections" spellcheck="false"></textarea>
       <div id="retour-corrections" style="margin-top:10px"></div>
     </div>
     <div class="modale-pied">
       <span class="pousse"></span>
-      <button class="bouton" data-fermer>Annuler</button>
-      <button class="bouton bouton-accent" id="btn-enregistrer-corrections">Enregistrer</button>
+      <button class="bouton" data-fermer data-i18n="ui.bouton.annuler"></button>
+      <button class="bouton bouton-accent" id="btn-enregistrer-corrections" data-i18n="ui.bouton.enregistrer"></button>
     </div>
   </div>
 </div>
@@ -386,70 +532,57 @@
   <div class="modale">
     <div class="modale-entete">
       <svg class="icone"><use href="#i-personnes"></use></svg>
-      <h2>Séparation des locuteurs</h2>
+      <h2 data-i18n="ui.modale.jeton.titre"></h2>
       <button class="bouton-icone" data-fermer><svg class="icone"><use href="#i-croix"></use></svg></button>
     </div>
     <div class="modale-corps">
       <div id="etat-diarisation-modale"></div>
 
       <div id="bloc-source-locuteurs" style="display:none">
-        <p>
-          Cette fonction repose sur PyTorch, environ 2,5 Go de composants
-          supplémentaires. Les embarquer ferait passer le programme d'installation
-          de quelques centaines de mégaoctets à près de trois gigaoctets, pour une
-          option que tout le monde n'utilise pas.
-        </p>
-        <p>
-          Elle reste disponible dans la version source du projet : l'installateur
-          pose PyTorch et pyannote sur demande. La marche à suivre est décrite dans
-          le fichier README, section « Séparation des locuteurs ».
-        </p>
+        <p data-i18n="ui.modale.jeton.source1"></p>
+        <p data-i18n="ui.modale.jeton.source2"></p>
         <div style="display:flex;gap:8px;margin-bottom:14px">
           <button class="bouton" id="btn-lien-projet">
-            <svg class="icone-s icone"><use href="#i-externe"></use></svg> Voir la procédure
+            <svg class="icone-s icone"><use href="#i-externe"></use></svg>
+            <span data-i18n="ui.modale.jeton.procedure"></span>
           </button>
         </div>
         <div class="encart encart-info">
           <svg class="icone-s icone"><use href="#i-info"></use></svg>
-          <span>Tout le reste de l'application fonctionne normalement, simplement sans étiquettes de locuteur.</span>
+          <span data-i18n="ui.modale.jeton.reste_ok"></span>
         </div>
       </div>
 
       <div id="bloc-procedure-jeton">
-        <p>
-          Le modèle qui reconnaît les voix est mis à disposition gratuitement, mais
-          son auteur demande d'accepter ses conditions et de s'identifier par un
-          jeton. Trois étapes, une seule fois.
-        </p>
+        <p data-i18n="ui.modale.jeton.intro"></p>
         <ol id="etapes-jeton"></ol>
         <div style="display:flex;gap:8px;margin-bottom:14px">
           <button class="bouton" id="btn-lien-conditions">
-            <svg class="icone-s icone"><use href="#i-externe"></use></svg> Page du modèle
+            <svg class="icone-s icone"><use href="#i-externe"></use></svg>
+            <span data-i18n="ui.modale.jeton.page_modele"></span>
           </button>
           <button class="bouton" id="btn-lien-jeton">
-            <svg class="icone-s icone"><use href="#i-externe"></use></svg> Créer un jeton
+            <svg class="icone-s icone"><use href="#i-externe"></use></svg>
+            <span data-i18n="ui.modale.jeton.creer"></span>
           </button>
         </div>
         <div class="champ">
-          <label for="champ-jeton">Jeton d'accès</label>
+          <label for="champ-jeton" data-i18n="ui.modale.jeton.champ"></label>
           <input type="password" id="champ-jeton" placeholder="hf_..." spellcheck="false">
-          <span class="aide">
-            Enregistré dans <code>jeton_hf.txt</code>, avec vos données personnelles.
-            Ce fichier n'est jamais versionné.
-          </span>
+          <span class="aide" data-i18n-html="ui.modale.jeton.aide"></span>
         </div>
         <div id="retour-jeton"></div>
         <div class="encart encart-info" style="margin-top:12px">
           <svg class="icone-s icone"><use href="#i-info"></use></svg>
-          <span>Sans jeton, la transcription fonctionne normalement, simplement sans étiquettes de locuteur.</span>
+          <span data-i18n="ui.modale.jeton.sans_jeton"></span>
         </div>
       </div>
     </div>
     <div class="modale-pied">
-      <button class="bouton bouton-discret" id="btn-effacer-jeton">Effacer le jeton</button>
+      <button class="bouton bouton-discret" id="btn-effacer-jeton" data-i18n="ui.modale.jeton.effacer"></button>
       <span class="pousse"></span>
-      <button class="bouton" data-fermer>Fermer</button>
-      <button class="bouton bouton-accent" id="btn-enregistrer-jeton">Enregistrer</button>
+      <button class="bouton" data-fermer data-i18n="ui.bouton.fermer"></button>
+      <button class="bouton bouton-accent" id="btn-enregistrer-jeton" data-i18n="ui.bouton.enregistrer"></button>
     </div>
   </div>
 </div>
@@ -458,7 +591,7 @@
   <div class="modale">
     <div class="modale-entete">
       <svg class="icone"><use href="#i-import"></use></svg>
-      <h2>Importer des données</h2>
+      <h2 data-i18n="ui.modale.import.titre"></h2>
       <button class="bouton-icone" data-fermer><svg class="icone"><use href="#i-croix"></use></svg></button>
     </div>
     <div class="modale-corps">
@@ -467,8 +600,8 @@
     </div>
     <div class="modale-pied">
       <span class="pousse"></span>
-      <button class="bouton" data-fermer>Annuler</button>
-      <button class="bouton bouton-accent" id="btn-confirmer-import">Remplacer mes données</button>
+      <button class="bouton" data-fermer data-i18n="ui.bouton.annuler"></button>
+      <button class="bouton bouton-accent" id="btn-confirmer-import" data-i18n="ui.modale.import.remplacer"></button>
     </div>
   </div>
 </div>
@@ -477,17 +610,133 @@
   <div class="modale modale-large">
     <div class="modale-entete">
       <svg class="icone"><use href="#i-fichier"></use></svg>
-      <h2 id="titre-apercu">Aperçu</h2>
+      <h2 id="titre-apercu" data-i18n="ui.modale.apercu.titre"></h2>
       <button class="bouton-icone" data-fermer><svg class="icone"><use href="#i-croix"></use></svg></button>
     </div>
     <div class="modale-corps">
       <div class="apercu" id="contenu-apercu"></div>
     </div>
     <div class="modale-pied">
-      <button class="bouton" id="btn-copier-apercu">Copier le texte</button>
+      <button class="bouton" id="btn-copier-apercu" data-i18n="ui.modale.apercu.copier"></button>
       <span class="pousse"></span>
-      <button class="bouton" id="btn-ouvrir-apercu">Ouvrir le fichier</button>
-      <button class="bouton bouton-accent" data-fermer>Fermer</button>
+      <button class="bouton" id="btn-ouvrir-apercu" data-i18n="ui.modale.apercu.ouvrir"></button>
+      <button class="bouton bouton-accent" data-fermer data-i18n="ui.bouton.fermer"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Vue de lecture : relire une transcription sans quitter l'application -->
+<div class="voile" id="modale-lecture">
+  <div class="modale modale-lecture">
+    <div class="modale-entete">
+      <svg class="icone"><use href="#i-loupe"></use></svg>
+      <h2 id="titre-lecture" data-i18n="ui.modale.lecture.titre"></h2>
+      <button class="bouton-icone" data-fermer><svg class="icone"><use href="#i-croix"></use></svg></button>
+    </div>
+    <div class="lecture-meta" id="lecture-meta"></div>
+    <div class="modale-corps">
+      <div id="lecture-avis"></div>
+      <div class="lecture-legende" id="lecture-legende">
+        <span class="exemple" data-i18n="ui.lecture.exemple"></span>
+        <span id="lecture-legende-texte" data-i18n="ui.lecture.legende"></span>
+      </div>
+      <div id="lecture-audio"></div>
+      <div class="lecture-texte" id="lecture-texte"></div>
+    </div>
+    <div class="modale-pied">
+      <button class="bouton" id="btn-ouvrir-lecture">
+        <svg class="icone-s icone"><use href="#i-externe"></use></svg>
+        <span data-i18n="ui.lecture.ouvrir"></span>
+      </button>
+      <span class="pousse"></span>
+      <span class="lecture-retour" id="lecture-retour"></span>
+      <button class="bouton" id="btn-copier-lecture">
+        <svg class="icone-s icone"><use href="#i-copie"></use></svg>
+        <span data-i18n="ui.lecture.copier"></span>
+      </button>
+      <button class="bouton bouton-accent" id="btn-copier-ia">
+        <svg class="icone-s icone"><use href="#i-etincelle"></use></svg>
+        <span data-i18n="ui.lecture.copier_ia"></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Bouton flottant propose sur une selection, dans la vue de lecture -->
+<button class="bouton-flottant" id="btn-corriger-selection">
+  <svg class="icone-s icone"><use href="#i-crayon"></use></svg>
+  <span data-i18n="ui.lecture.corriger"></span>
+</button>
+
+<div class="voile" id="modale-correction">
+  <div class="modale">
+    <div class="modale-entete">
+      <svg class="icone"><use href="#i-crayon"></use></svg>
+      <h2 data-i18n="ui.modale.correction.titre"></h2>
+      <button class="bouton-icone" data-fermer><svg class="icone"><use href="#i-croix"></use></svg></button>
+    </div>
+    <div class="modale-corps">
+      <div class="champ">
+        <label for="correction-source" data-i18n="ui.correction.source"></label>
+        <input type="text" id="correction-source" readonly>
+      </div>
+      <div class="champ">
+        <label for="correction-cible" data-i18n="ui.correction.cible"></label>
+        <input type="text" id="correction-cible" spellcheck="false">
+        <span class="aide" data-i18n="ui.correction.aide"></span>
+      </div>
+      <label class="case" id="case-regle">
+        <input type="checkbox" id="correction-regle" checked>
+        <span id="correction-question" data-i18n="ui.correction.question"></span>
+      </label>
+      <div id="retour-correction" style="margin-top:12px"></div>
+    </div>
+    <div class="modale-pied">
+      <span class="pousse"></span>
+      <button class="bouton" data-fermer data-i18n="ui.bouton.annuler"></button>
+      <button class="bouton bouton-accent" id="btn-appliquer-correction" data-i18n="ui.correction.appliquer"></button>
+    </div>
+  </div>
+</div>
+
+<div class="voile" id="modale-gabarit">
+  <div class="modale modale-large">
+    <div class="modale-entete">
+      <svg class="icone"><use href="#i-etincelle"></use></svg>
+      <h2 data-i18n="ui.modale.gabarit.titre"></h2>
+      <button class="bouton-icone" data-fermer><svg class="icone"><use href="#i-croix"></use></svg></button>
+    </div>
+    <div class="modale-corps">
+      <p data-i18n="ui.modale.gabarit.intro"></p>
+      <div class="encart encart-info" style="margin-bottom:12px">
+        <svg class="icone-s icone"><use href="#i-info"></use></svg>
+        <span data-i18n-html="ui.modale.gabarit.variables"></span>
+      </div>
+      <textarea id="zone-gabarit" spellcheck="false"></textarea>
+      <div id="retour-gabarit" style="margin-top:10px"></div>
+    </div>
+    <div class="modale-pied">
+      <span class="pousse"></span>
+      <button class="bouton" data-fermer data-i18n="ui.bouton.annuler"></button>
+      <button class="bouton bouton-accent" id="btn-enregistrer-gabarit" data-i18n="ui.bouton.enregistrer"></button>
+    </div>
+  </div>
+</div>
+
+<div class="voile" id="modale-stockage">
+  <div class="modale">
+    <div class="modale-entete">
+      <svg class="icone"><use href="#i-loupe"></use></svg>
+      <h2 data-i18n="ui.modale.stockage.titre"></h2>
+      <button class="bouton-icone" data-fermer><svg class="icone"><use href="#i-croix"></use></svg></button>
+    </div>
+    <div class="modale-corps">
+      <p data-i18n="ui.modale.stockage.intro"></p>
+      <div id="contenu-stockage"></div>
+    </div>
+    <div class="modale-pied">
+      <span class="pousse"></span>
+      <button class="bouton bouton-accent" data-fermer data-i18n="ui.bouton.fermer"></button>
     </div>
   </div>
 </div>
@@ -496,64 +745,65 @@
   <div class="modale modale-large">
     <div class="modale-entete">
       <svg class="icone"><use href="#i-aide"></use></svg>
-      <h2>Aide</h2>
+      <h2 data-i18n="ui.modale.aide.titre"></h2>
       <button class="bouton-icone" data-fermer><svg class="icone"><use href="#i-croix"></use></svg></button>
     </div>
     <div class="modale-corps">
-      <h3>Ce que fait cet outil</h3>
-      <p>
-        Il convertit des enregistrements audio en texte, entièrement sur votre
-        machine. Aucun fichier, aucun extrait, aucune métadonnée n'est envoyé sur
-        Internet. Les modèles sont téléchargés une seule fois, puis tout
-        fonctionne hors connexion.
-      </p>
+      <h3 data-i18n="ui.aide.h_outil"></h3>
+      <p data-i18n="ui.aide.p_outil"></p>
 
-      <h3>Les deux presets</h3>
+      <h3 data-i18n="ui.aide.h_presets"></h3>
       <div class="defilable">
         <table class="tableau">
-          <thead><tr><th>Preset</th><th>Modèle</th><th>Pour quoi</th></tr></thead>
+          <thead><tr>
+            <th data-i18n="ui.aide.th_preset"></th>
+            <th data-i18n="ui.aide.th_modele"></th>
+            <th data-i18n="ui.aide.th_usage"></th>
+          </tr></thead>
           <tbody>
             <tr>
-              <td><strong>Qualité maximale</strong></td><td>large-v3</td>
-              <td>Réunions, entretiens, tout ce qui sera relu ou résumé ensuite. On lance et on laisse tourner.</td>
+              <td><strong data-i18n="ui.aide.preset_qualite"></strong></td><td>large-v3</td>
+              <td data-i18n="ui.aide.preset_qualite_usage"></td>
             </tr>
             <tr>
-              <td><strong>Rapide</strong></td><td>large-v3-turbo</td>
-              <td>Environ quatre fois plus rapide, qualité un cran en dessous. Pour dégrossir vite.</td>
+              <td><strong data-i18n="ui.aide.preset_rapide"></strong></td><td>large-v3-turbo</td>
+              <td data-i18n="ui.aide.preset_rapide_usage"></td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <h3>Vocabulaire et corrections</h3>
-      <p>
-        Le <strong>glossaire</strong> est soufflé au modèle avant la transcription
-        et l'oriente vers la bonne orthographe des noms propres. Les
-        <strong>corrections</strong> réparent après coup les erreurs récurrentes
-        que le glossaire n'a pas suffi à éviter.
-      </p>
+      <h3 data-i18n="ui.aide.h_vocabulaire"></h3>
+      <p data-i18n-html="ui.aide.p_vocabulaire"></p>
 
-      <h3>Raccourcis</h3>
+      <h3 data-i18n="ui.aide.h_relire"></h3>
+      <p data-i18n-html="ui.aide.p_relire1"></p>
+      <p data-i18n-html="ui.aide.p_relire2"></p>
+
+      <h3 data-i18n="ui.aide.h_deposer"></h3>
+      <p data-i18n-html="ui.aide.p_deposer1"></p>
+      <p data-i18n="ui.aide.p_deposer2"></p>
+
+      <h3 data-i18n="ui.aide.h_raccourcis"></h3>
       <ul>
-        <li><code>Ctrl</code> + <code>Entrée</code> : lancer la file</li>
-        <li><code>Échap</code> : fermer la fenêtre ouverte</li>
-        <li><code>Ctrl</code> + <code>+</code> / <code>-</code> / <code>0</code> : zoom</li>
+        <li data-i18n-html="ui.aide.raccourci_ouvrir"></li>
+        <li data-i18n-html="ui.aide.raccourci_lancer"></li>
+        <li data-i18n-html="ui.aide.raccourci_fermer"></li>
+        <li data-i18n-html="ui.aide.raccourci_zoom"></li>
       </ul>
 
-      <h3>Quand quelque chose ne va pas</h3>
-      <p>
-        Chaque échec est expliqué en clair dans la file, et le détail technique
-        complet est écrit dans le fichier de journal, ouvrable depuis la barre du bas.
-      </p>
+      <h3 data-i18n="ui.aide.h_probleme"></h3>
+      <p data-i18n="ui.aide.p_probleme"></p>
     </div>
     <div class="modale-pied">
-      <button class="bouton bouton-discret" id="btn-ouvrir-app">Ouvrir le dossier de mes données</button>
+      <button class="bouton bouton-discret" id="btn-ouvrir-app" data-i18n="ui.aide.ouvrir_donnees"></button>
       <span class="pousse"></span>
-      <button class="bouton bouton-accent" data-fermer>Fermer</button>
+      <button class="bouton bouton-accent" data-fermer data-i18n="ui.bouton.fermer"></button>
     </div>
   </div>
 </div>
 
+<script src="langues.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -1,319 +1,173 @@
+**English** · [Français](README.fr.md)
+
 # WhiScribe
 
-Application de bureau pour transcrire des enregistrements audio en texte, **entièrement sur votre machine**. Pensée pour les réunions : audio de salle, plusieurs voix, noms propres et jargon maison.
+Turn recordings into text on your own machine. No account, no cloud, no upload.
 
-Windows, interface en français, installation automatisée.
+[![Release](https://img.shields.io/github/v/release/BurN-30/whiscribe?label=release)](https://github.com/BurN-30/whiscribe/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Platform: Windows](https://img.shields.io/badge/platform-Windows%2064--bit-lightgrey)
 
----
+WhiScribe is a desktop app for Windows built on [faster-whisper](https://github.com/SYSTRAN/faster-whisper). Drop audio files on the window, get text files next to them. It was written for meeting recordings: room audio, several voices, proper nouns and in-house jargon. The interface is available in English and French.
 
-## Installation
-
-### La voie recommandée : le programme d'installation
-
-1. Téléchargez **`WhiScribe-Setup-X.Y.Z.exe`** depuis l'onglet [Releases](../../releases).
-2. Double-cliquez dessus, l'assistant est en français.
-3. Lancez **WhiScribe** depuis le menu Démarrer.
-
-**Aucun prérequis**, rien d'autre à installer : tout ce dont l'application a besoin est dans ce fichier. L'installation se fait **par utilisateur, sans droits administrateur**, dans `%LOCALAPPDATA%\Programs\WhiScribe`. Vos réglages, votre glossaire et vos journaux vivent dans `%LOCALAPPDATA%\WhiScribe`, jamais dans le dossier du programme.
-
-L'assistant vous demande **où ranger les modèles de transcription**, de 1,6 à 3,1 Go selon le preset. Le défaut convient à la plupart des postes, et un disque à l'étroit se règle en désignant un autre emplacement. Ce choix reste modifiable ensuite, dans les réglages de l'application, section « Modèles ».
-
-Réinstaller une version plus récente par-dessus l'ancienne **ne fait rien perdre** : réglages, glossaire, corrections et modèles sont conservés. La désinstallation, elle, demande explicitement s'il faut supprimer les modèles, puis vos données, en affichant la place réellement occupée. Répondre non aux deux ne retire que le programme.
-
-**Trois limites, dites franchement :**
-
-- Les **modèles ne sont pas dans le programme d'installation**. Ils se téléchargent au premier usage, une seule fois, et l'application annonce la taille avant de commencer. Ensuite elle fonctionne hors connexion, y compris sur un poste isolé.
-- La **séparation des locuteurs n'est pas incluse** : elle repose sur PyTorch, environ 2,5 Go, ce qui multiplierait par dix la taille du téléchargement pour une fonction facultative. Elle reste disponible dans la version source, voir « [Séparation des locuteurs](#séparation-des-locuteurs) ». Dans la version installée, la case le dit clairement au lieu d'échouer.
-- **Windows 64 bits uniquement.** L'affichage s'appuie sur *Microsoft Edge WebView2 Runtime*, présent d'origine sur Windows 11 et sur les Windows 10 à jour. S'il manque, l'assistant le télécharge depuis le site de Microsoft.
-
-### La voie source
-
-Réservée à deux cas : **modifier le code**, ou **obtenir la séparation des locuteurs**. Elle est décrite en fin de fichier, dans « [Installation depuis les sources](#installation-depuis-les-sources-développeurs-et-séparation-des-locuteurs) ».
+<!-- screenshot 1: main window, dark theme, drop area empty, hardware card visible -->
 
 ---
 
-## Vie privée : c'est tout l'intérêt
+## Install
 
-**Rien de ce que vous transcrivez ne quitte votre ordinateur.** Pas de compte, pas de clé d'API, pas d'envoi vers un service en ligne, pas de télémétrie. L'audio est lu depuis votre disque, calculé par votre processeur, et le texte est écrit à côté.
+1. Download **`WhiScribe-Setup-X.Y.Z.exe`** from the [Releases](https://github.com/BurN-30/whiscribe/releases) page.
+2. Run it.
+3. Start **WhiScribe** from the Start menu.
 
-La seule chose qui transite par Internet est le **téléchargement initial du modèle** (1,6 ou 3,1 Go selon le preset), une fois pour toutes. Ensuite l'application fonctionne hors connexion, y compris sur un poste isolé.
+Nothing else to install. The setup is per user, **no administrator rights**, and it installs into `%LOCALAPPDATA%\Programs\WhiScribe`. Your settings, glossary and logs live in `%LOCALAPPDATA%\WhiScribe`, never inside the program folder, so reinstalling a newer version over the old one loses nothing.
 
-C'est la différence de fond avec les services de transcription en ligne : un compte rendu de réunion, un entretien, une conversation client ne sont pas des données que l'on téléverse sans y penser.
+The setup asks **where to keep the transcription models**, 1.6 to 3.1 GB depending on the preset. The models are not bundled: they are downloaded once, on first use, and the app tells you the size before starting. After that it works offline.
 
----
+The installer is not signed, so SmartScreen may warn on first run: "More info", then "Run anyway". See [Known limits](#known-limits).
 
-## Utilisation
-
-1. **Glissez** un ou plusieurs fichiers audio sur la fenêtre, ou cliquez sur la zone de dépôt.
-2. Choisissez le preset : **Qualité maximale** ou **Rapide**.
-3. Cliquez sur **Lancer la transcription**. Les fichiers sont traités l'un après l'autre.
-
-Formats acceptés : `.m4a` (dont les enregistrements de smartphone), `.mp3`, `.wav`, `.ogg`, `.flac`, `.opus`, `.webm`, `.wma`, `.aac`, `.amr`, et les vidéos courantes (`.mp4`, `.mkv`, `.mov`), dont la piste audio est extraite.
-
-Les sorties sont écrites dans le dossier que vous choisissez, nommées `AAAA-MM-JJ-nom-du-fichier.txt`. Les formats `.srt` et `.vtt` sont disponibles en option.
-
-Chaque fichier texte porte un en-tête rappelant la source, la durée, le modèle utilisé, la date, le temps de calcul réel et le nombre de locuteurs détectés.
+> Two features are not in the setup, on purpose: **speaker separation** needs PyTorch, about 2.5 GB, and lives in the [source install](#run-from-source). Everything else is there.
 
 ---
 
-## Les deux presets
+## What it does
 
-| Preset | Modèle | Téléchargement | Pour quoi |
-|---|---|---|---|
-| **Qualité maximale** (défaut) | `large-v3` | 3,1 Go | Réunions, entretiens, tout ce qui sera relu ou résumé. On lance et on laisse tourner. |
-| **Rapide** | `large-v3-turbo` | 1,6 Go | Environ quatre fois plus rapide, qualité un cran en dessous. Pour dégrossir. |
+- **Drop and go.** Drag files or a folder onto the window, pick a preset, start. Files are processed one after another, a failure does not stop the queue.
+- **Formats in:** `m4a` (including phone recordings), `mp3`, `wav`, `ogg`, `flac`, `opus`, `webm`, `wma`, `aac`, `amr`, and the usual video containers (`mp4`, `mkv`, `mov`), whose audio track is extracted.
+- **Formats out:** `.txt` with a header (source, duration, model, date, real compute time), plus optional `.srt` and `.vtt`. Output names follow a configurable pattern with `{nom}`, `{date}`, `{heure}` and `{modele}`.
+- **Two presets.** *Highest quality* (`large-v3`) for anything that will be read back, *Fast* (`large-v3-turbo`) to get the gist. Other Whisper models are reachable in advanced mode.
+- **Glossary and corrections.** A list of proper nouns primes the model before it transcribes, and a list of rewrite rules cleans up the recurring mistakes afterwards. See [Vocabulary](#vocabulary-and-corrections).
+- **Read back in the app.** Uncertain words are highlighted, any word shows its confidence on hover, and correcting one can be remembered for good. See [Reading back](#reading-back-a-transcript).
+- **Copy for AI.** One button puts your own instruction template, the metadata and the full text on the clipboard, ready to paste into the assistant of your choice. Nothing is sent by the app.
+- **Progressive saving.** Text is written segment by segment. A crash or a power cut does not lose the work: the app offers to resume at the next start.
+- **Watched folder,** off by default. A folder can be watched so that new recordings join the queue on their own, which suits a dictaphone or a meeting recorder that always drops files in the same place.
+- **Speaker separation,** optional, source install only. Produces a labelled transcript, `Speaker 1`, `Speaker 2`, which is worth a lot for a meeting summary.
+- **Taskbar progress,** disk usage report, export and import of your data as a single zip file, dark and light theme, three keyboard shortcuts and no more: `Ctrl` + `O`, `Ctrl` + `Enter`, `Esc`.
 
-Les deux utilisent la détection d'activité vocale (VAD), une température de 0 pour un décodage déterministe, et un faisceau élargi. Les modèles `tiny`, `base`, `small`, `medium`, `large-v2` restent accessibles par le **mode avancé**.
-
-### Pourquoi `large-v3` et pas seulement le turbo
-
-Le turbo réduit le décodeur de 32 à 4 couches. Il paie ce gain de vitesse par environ 1 à 2 points de WER en plus, avec une dégradation un peu plus marquée sur les langues autres que l'anglais. Sur du français de réunion (voix multiples, micro éloigné, chevauchements), cela se traduit par des mots mal transcrits, des noms propres écorchés, des négations perdues. Quand le texte doit rester fidèle, `large-v3` vaut son temps de calcul.
-
-### Vitesses observées et estimées
-
-Le facteur donné est le rapport **durée de calcul / durée de l'audio**. En dessous de 1, c'est plus rapide que l'écoute.
-
-| Matériel | Qualité maximale | Rapide | Une heure d'audio, en qualité |
-|---|---|---|---|
-| Ultraportable, 12 à 14 fils, sans carte dédiée (type Core Ultra 7 155U) | environ 1,2 x | environ 0,3 x | environ 1 h 15 |
-| Processeur de bureau costaud, 16 fils et plus | environ 0,7 x | environ 0,2 x | environ 40 min |
-| Portable modeste, 4 à 8 fils | environ 2 x | environ 0,5 x | environ 2 h |
-| Carte NVIDIA (CUDA, float16) | environ 0,1 x | environ 0,05 x | environ 6 min |
-
-La séparation des locuteurs ajoute à peu près 0,2 x sur processeur.
-
-**Ce sont des estimations, pas des garanties.** Elles sont calées sur des mesures publiques et ajustées au nombre de cœurs de votre machine. L'application affiche le **temps réellement mesuré** après chaque transcription, et l'écrit dans l'en-tête du fichier produit.
+<!-- gif: drop two files, pick the Fast preset, start, progress bar filling, a finished line with its Read back button (about 15 s, no sound) -->
 
 ---
 
-## Vocabulaire et corrections
+## Privacy
 
-C'est le point faible de toute transcription automatique : les noms propres, les noms de sociétés et les termes anglais sortent massacrés. Deux leviers y répondent, complémentaires.
+**Nothing you transcribe leaves your computer.** No account, no API key, no upload to an online service, no telemetry. The audio is read from your disk, computed by your processor, and the text is written next to it.
 
-### Le glossaire, `vocabulaire.txt`
+Two things can use the network, both of them explicit:
 
-Un terme par ligne : prénoms, sociétés, produits, sigles. Cette liste est envoyée au modèle **avant** qu'il ne transcrive, comme début de contexte (`initial_prompt`). Whisper est alors orienté vers ces orthographes.
+- **Downloading a model**, once, the first time you use a preset. The app announces the size before starting.
+- **The update check**, which is **off by default**. As long as it is off, the application makes no outgoing network call at all, apart from downloading the models you ask for.
+
+Turned on, the update check queries the public releases page of this project at startup, **once a day at most**. Nothing about you or your files is sent, the call has a short timeout, and a failure, offline machine or firewall, produces no message at all: it goes to the log and that is it. A newer version shows a discreet banner with a button that opens the release page in your browser. Nothing downloads or installs on its own.
+
+The Hugging Face token used for speaker separation is never included in an export, and never versioned.
+
+---
+
+## Vocabulary and corrections
+
+Proper nouns, company names and technical terms are what automatic transcription mangles most. Two settings deal with that, and they complement each other.
+
+**The glossary, `vocabulaire.txt`.** One term per line. The list is fed to the model **before** it transcribes, as the start of its context, which steers Whisper towards those spellings.
 
 ```
 Jean Dupont
-MonEntreprise
+MyCompany
 GitLab
 Kubernetes
-RGPD
+GDPR
 ```
 
-**Limite à connaître.** L'amorce d'un modèle Whisper ne peut pas dépasser **224 jetons**, soit une petite centaine de termes courts. Au-delà, faster-whisper tronque tout seul, et silencieusement. L'application tronque proprement à votre place, en gardant les termes **du haut de la liste**, et vous prévient dans l'interface quand la liste est trop longue : mettez donc les plus importants en premier.
+A Whisper prompt cannot exceed **224 tokens**, roughly a hundred short terms. Beyond that, faster-whisper silently truncates. WhiScribe truncates cleanly instead, keeping the terms **at the top of the list**, and says so in the interface. Put the important ones first. The token count is exact: it uses the tokeniser of the model actually loaded. The introduction sentence of the prompt follows the **spoken language** of the recording, never the interface language: the model reads it as the beginning of a text, and a French sentence has no business at the head of an English recording.
 
-Le décompte des jetons est exact : il utilise le tokeniseur du modèle réellement chargé, pas une estimation.
-
-### Les corrections, `corrections.txt`
-
-Pour les massacres récurrents que l'amorce ne suffit pas à éviter. Une règle par ligne :
+**The corrections, `corrections.txt`.** For the recurring damage the prompt does not prevent. One rule per line, applied to the final text, case insensitive, whole words only, so the rule `git` will not touch `digital`.
 
 ```
 guitte lab => GitLab
 cubernetes => Kubernetes
-er gé pé dé => RGPD
 ```
 
-Appliquées au texte final. **Insensible à la casse**, **mot entier uniquement** : la règle `git` ne touchera pas `digital`. Les expressions de plusieurs mots fonctionnent, et les espaces multiples sont tolérés.
-
-Les deux fichiers s'éditent directement, ou depuis les panneaux de l'application. Les exemples livrés sont génériques : remplacez-les par votre vocabulaire.
-
-### Sauvegarder et transporter ses données
-
-Un glossaire professionnel se construit sur des mois, et il n'a rien à faire en ligne : noms de collaborateurs, de clients, de projets internes. Le réflexe « je le mets dans un dépôt privé » demande un compte, un client Git, et expose quand même la liste à un hébergeur. **La réponse de WhiScribe est un fichier**, et rien d'autre.
-
-Panneau **« Mes données »**, dans la colonne des réglages :
-
-- **Exporter mes données** produit une archive `whiscribe-donnees-AAAA-MM-JJ.zip` à l'emplacement de votre choix. Elle contient le glossaire, les corrections, les réglages, et un petit manifeste (version, date, liste des fichiers). Rangez-la où vous voulez : clé USB, partage de service, sauvegarde d'entreprise.
-- **Importer des données** relit une de ces archives. Le fichier est d'abord validé, puis un **aperçu** annonce ce qui va changer, nombre de termes, nombre de règles, réglages concernés. Rien n'est écrit avant votre confirmation.
-
-Trois garanties qui font que cela reste sûr :
-
-1. **Le jeton Hugging Face n'est jamais exporté.** C'est un secret personnel, il reste sur la machine. Les modèles et les journaux non plus : les premiers se retéléchargent seuls, les seconds ne décrivent que le poste qui les a écrits.
-2. **Rien n'est écrasé sans filet.** Juste avant d'appliquer un import, l'état courant part dans `whiscribe-donnees-avant-import-AAAA-MM-JJ-HHMMSS.zip`, déposé dans le dossier de vos données, et l'application vous dit où. Ce fichier se réimporte de la même façon pour revenir en arrière.
-3. **Les chemins ne suivent pas bêtement.** Le dossier de sortie et le dossier des modèles ne sont repris que s'ils existent réellement sur le poste d'arrivée. Sinon vos valeurs locales sont conservées, et l'aperçu le dit avant l'import.
-
-Une archive qui n'est pas un export WhiScribe, abîmée, trafiquée ou produite par une version plus récente est refusée avec la raison en clair, sans avoir touché à quoi que ce soit.
+Both files are plain text. Edit them by hand or from the panels in the app. The **My data** panel exports them, with your settings and your AI template if you have one, as a single `whiscribe-donnees-YYYY-MM-DD.zip` you can put on a USB stick or in a company backup. An import shows a preview of what would change and writes nothing before you confirm, and the previous state is saved next to it first.
 
 ---
 
-## Séparation des locuteurs
+## Reading back a transcript
 
-> **Disponible uniquement dans la version source.** Cette fonction repose sur PyTorch, environ 2,5 Go, ce qui n'a pas sa place dans un programme d'installation de quelques centaines de mégaoctets. Dans la version installée, la case l'indique et renvoie ici, au lieu d'échouer. Pour l'obtenir, voir « [Installation depuis les sources](#installation-depuis-les-sources-développeurs-et-séparation-des-locuteurs) ».
+A transcript opens **in the app**, no editor needed: click a line in the Transcripts tab, or the read button on a file that just finished.
 
-Facultative, activée par défaut sur le preset Qualité. Elle produit un texte étiqueté :
+<!-- screenshot 2: reading view, a paragraph with two or three amber highlighted words, the confidence tooltip visible on one of them -->
 
-```
-Locuteur 1 : On reprend le point d'hier sur le déploiement.
+Whisper gives a probability for every word it writes. The reading view **highlights only the uncertain ones**, in discreet amber: below 0.50 the mark is light, below 0.30 it is clearer. Hovering any word shows its confidence, highlighted or not. In practice that flags around one word in ten in the worst case, and one in thirty-five with a decent model, so a handful of places to listen to again rather than a striped document.
 
-Locuteur 2 : C'est calé, la bascule est prévue jeudi.
-```
+These values live in a **companion `.json` file** written next to the text, a few tens of kilobytes per hour of audio. It is optional: an older transcript, or one produced with the option off, opens normally without highlighting.
 
-Pour un compte rendu, ou pour un résumé produit ensuite par une IA, cette structure conversationnelle est une information de premier ordre : qui répond à qui, qui s'engage sur quoi.
+Selecting a word or a short phrase offers to **correct it**. The app applies the replacement to the text on screen and to the saved file, updates the companion, and adds the rule to a dedicated section of `corrections.txt` so the same mistake is fixed automatically from then on.
 
-### Ce qu'il faut faire une fois
-
-Le modèle qui reconnaît les voix (pyannote) est gratuit mais **sous conditions** : son auteur demande de les accepter et de s'identifier.
-
-1. Créez un compte sur [huggingface.co](https://huggingface.co).
-2. Ouvrez [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) et acceptez les conditions.
-3. Créez un jeton d'accès **Read** dans les réglages du compte.
-4. Collez-le dans le panneau « Locuteurs » de l'application.
-
-Le jeton est enregistré dans `jeton_hf.txt`, avec vos données, et **jamais versionné** (il est dans le `.gitignore`). La variable d'environnement `HF_TOKEN` est également reconnue et prioritaire.
-
-**Sans jeton, tout fonctionne quand même** : la transcription se termine normalement, simplement sans étiquettes, avec un message clair et aucune erreur.
-
-### Tenir dans 16 Go de mémoire
-
-Le vrai risque n'est pas la taille d'un modèle isolé, c'est le **pic simultané** des deux. L'application **séquence** donc strictement : elle transcrit, libère explicitement le modèle Whisper, force un passage du ramasse-miettes, puis charge la diarisation. Les pics se suivent au lieu de s'additionner, et `large-v3` plus pyannote tiennent dans 16 Go.
-
-Si la mémoire détectée est trop juste, l'application le dit avant de lancer et conseille le preset Rapide.
-
-### Honnêteté sur la qualité
-
-pyannote sur un enregistrement mono de salle, micro unique, voix qui se chevauchent, n'est pas infaillible. Les chevauchements et les voix lointaines sont les cas durs. Les étiquettes sont utiles, elles ne sont pas une vérité. Préciser le **nombre de participants** dans les réglages améliore nettement le découpage.
+**Copy for AI** puts an instruction template, the recording metadata and the full transcript on the clipboard. The template is your own file, `gabarit-ia.txt`, created on first use and editable from the settings, with `{texte}`, `{fichier}`, `{date}`, `{duree}`, `{locuteurs}` and `{modele}` replaced at copy time.
 
 ---
 
-## Matériel
+## Speed
 
-Au lancement, l'application détecte le processeur, la mémoire, les cartes graphiques et les circuits neuronaux (NPU), puis affiche une recommandation. La carte « Votre matériel » se déplie pour tout le détail.
+The factor below is compute time divided by audio duration. Under 1 is faster than listening.
 
-**Ce qui est accéléré en v1 :**
+| Hardware | Highest quality | Fast | One hour of audio, in quality |
+|---|---|---|---|
+| Thin laptop, 12 to 14 threads, no dedicated card | about 1.2 x | about 0.3 x | about 1 h 15 |
+| Desktop processor, 16 threads and up | about 0.7 x | about 0.2 x | about 40 min |
+| Modest laptop, 4 to 8 threads | about 2 x | about 0.5 x | about 2 h |
+| NVIDIA card (CUDA, float16) | about 0.1 x | about 0.05 x | about 6 min |
 
-- **Processeur, partout** : quantification `int8`, le meilleur rapport vitesse / mémoire / qualité. C'est le mode par défaut et il est parfaitement utilisable, y compris sur un ultraportable.
-- **Cartes NVIDIA** : CUDA en `float16`, automatiquement, si le pilote et les bibliothèques répondent.
+**These are estimates, not guarantees.** They are calibrated on public measurements and adjusted to the number of cores on your machine. The app shows the **time actually measured** after every transcription, and writes it in the header of the output file. Speaker separation adds roughly 0.2 x on CPU.
 
-**Ce qui est détecté et affiché mais pas exploité :** cartes AMD Radeon, circuits graphiques intégrés Intel, NPU. L'application le dit noir sur blanc plutôt que de laisser croire à une accélération qui n'existe pas.
+Acceleration in this version: **CPU everywhere** with `int8` quantisation, which is the default and perfectly usable, and **NVIDIA cards** in CUDA `float16`, automatically, when the driver and libraries answer. AMD Radeon cards, Intel integrated graphics and NPUs are detected and displayed but **not used**, because faster-whisper sits on [CTranslate2](https://opennmt.net/CTranslate2/hardware_support.html), which supports x86-64 and ARM64 CPUs and NVIDIA GPUs only. The app says so plainly rather than implying an acceleration that does not exist.
 
-La raison est structurelle : faster-whisper repose sur **CTranslate2**, dont la [documentation matérielle](https://opennmt.net/CTranslate2/hardware_support.html) ne supporte que le CPU x86-64 / ARM64 et les GPU NVIDIA. Ni ROCm, ni Vulkan, ni Metal, ni DirectML. Sur un Radeon, faster-whisper tourne en CPU pur, et le GPU ne sert à rien.
+<details>
+<summary>What could change that, later</summary>
 
-### Ouvertures matérielles prévues
+**whisper.cpp with the Vulkan backend** is the solid path, and the only realistic one to accelerate a Radeon on Windows: a C/C++ port independent of PyTorch and CUDA, doing multi-vendor GPU inference without vendor specific code. Public measurements put it around 8 x real time on an RX 9070 XT, and 3 to 4 times better than CPU alone on a Radeon 680M integrated GPU. It would ship as a prebuilt Windows Vulkan binary driven as a subprocess, so that nobody has to install a C++ toolchain. The cost is a second model format, GGUF instead of CTranslate2, and an engine abstraction layer, which is why it is not here yet.
 
-Deux pistes existent pour exploiter le matériel non-NVIDIA. Elles sont documentées ici avec leur maturité réelle, pas comme des promesses.
+**OpenVINO for Intel integrated GPUs and NPUs** is interesting but not mature enough for a turnkey tool: the backend wants a precise OpenVINO version, and Whisper model conversion breaks with some `transformers` versions. As for the NPU itself, its appeal is battery life, a few watts against 15 to 25 for the integrated GPU, not raw speed. If Intel acceleration ever becomes a goal, Vulkan is the simpler and more robust route.
 
-**1. whisper.cpp + Vulkan — la piste solide, prévue en v1.x**
-
-whisper.cpp est un portage C/C++ indépendant de PyTorch et de CUDA. Son backend Vulkan fait de l'inférence GPU multi-vendeur (AMD, Intel, NVIDIA) sans code spécifique au constructeur. C'est le seul chemin réaliste pour accélérer un Radeon sous Windows.
-
-Mesures publiques : environ 8 x le temps réel sur une RX 9070 XT, et un facteur 3 à 4 fois meilleur que le CPU seul sur un iGPU Radeon 680M. Un GPU dédié récent y gagne franchement.
-
-Livraison envisagée : un binaire Windows Vulkan pré-compilé, piloté en sous-processus, pour ne demander à personne d'installer une chaîne de compilation C++. Coût : un deuxième format de modèles (GGUF au lieu de CTranslate2) et une couche d'abstraction de moteur. C'est pour cela que ce n'est pas dans la v1.
-
-**2. OpenVINO pour l'iGPU et le NPU Intel — intéressant, pas encore mûr**
-
-whisper.cpp dispose aussi d'un backend OpenVINO, et OpenVINO sait piloter l'iGPU Arc comme le NPU des processeurs Meteor Lake. Sur un Core Ultra 7 155H, Whisper atteint un facteur temps réel 3 à 4 fois meilleur que le CPU seul.
-
-Mais la maturité opérationnelle est faible pour un outil clé en main : le backend réclame une version précise d'OpenVINO, et la conversion des modèles Whisper casse avec certaines versions de `transformers`. C'est fragile et versionné au petit soin.
-
-Quant au NPU lui-même, son intérêt est surtout **l'autonomie** (quelques watts contre 15 à 25 pour l'iGPU), pas la vitesse brute. Pour transcrire des fichiers en lot sur secteur, le gain est faible.
-
-Conclusion honnête : si l'accélération d'un iGPU Intel devient un objectif, passer par **Vulkan** (le même chemin que pour l'AMD) est plus simple et plus robuste que toute la chaîne OpenVINO.
+</details>
 
 ---
 
-## Diagnostic
+## Known limits
 
-Chaque échec est expliqué **en français, dans l'interface** : fichier illisible, modèle à télécharger, mémoire insuffisante, jeton absent ou invalide, disque plein, bibliothèques CUDA manquantes. Aucun traceback n'apparaît à l'écran.
-
-Le détail technique complet part dans un fichier horodaté du dossier `logs/`, dont le nom est cité dans le message d'erreur. Le bouton **« Ouvrir le fichier détaillé »**, dans la barre du bas, l'ouvre directement. Les 30 derniers journaux sont conservés, les plus anciens sont purgés.
-
-Un fichier en échec **n'interrompt pas la file** : les suivants sont traités normalement.
-
-Les avertissements bruyants des dépendances (notamment le message `torchcodec` / FFmpeg au démarrage de pyannote) sont interceptés et rangés dans le journal plutôt qu'affichés.
-
----
-
-## Choix d'architecture
-
-**Un seul moteur : faster-whisper (CTranslate2). whisperX a été retiré.**
-
-La version précédente de cet outil pilotait whisperX en ligne de commande. Le remplacement se justifie sur quatre points :
-
-1. **whisperX impose PyTorch**, faster-whisper non : il n'utilise que CTranslate2. Cela permet une installation par défaut d'environ 250 Mo au lieu de près de 3 Go, et de ne poser PyTorch que si l'on veut la séparation des locuteurs.
-2. **L'alignement mot à mot par wav2vec**, principal apport de whisperX, ne sert pas ici : l'objectif est la fidélité du texte, pas le sous-titrage à la milliseconde. faster-whisper fournit déjà des horodatages par mot, largement suffisants pour attribuer les locuteurs, écrire des `.srt` et des `.vtt`.
-3. **La VAD, l'autre apport de whisperX**, est intégrée à faster-whisper depuis la version 1.x (`vad_filter`).
-4. **Piloter une bibliothèque plutôt qu'un sous-processus** donne la progression segment par segment, le contrôle exact de la libération mémoire entre les étapes (indispensable pour tenir dans 16 Go), les erreurs typées, et l'accès au tokeniseur du modèle pour mesurer exactement le budget de l'amorce.
-
-pyannote est appelé directement, sans passer par whisperX, ce qui donne la main sur le moment précis du chargement et de la libération.
-
-Le format d'organisation reste volontairement simple : une application de bureau mono-utilisateur, un paquet `app/` de modules courts, une interface web dans `web/`.
-
-```
-transcriber.pyw       fenêtre, passerelle vers l'interface, mode --verifier
-installer.py          installateur relançable, version source
-app/
-  chemins.py          emplacements, selon source ou version installée
-  materiel.py         détection processeur, mémoire, GPU, NPU
-  presets.py          presets, estimations, garde-fous mémoire
-  audio.py            FFmpeg, durée, décodage 16 kHz mono
-  moteur.py           faster-whisper, chargement et libération
-  diarisation.py      pyannote, jeton, attribution des locuteurs
-  vocabulaire.py      glossaire, amorce, corrections
-  sorties.py          txt, srt, vtt, en-têtes
-  traitement.py       file séquentielle
-  config.py           configuration
-  journal.py          journalisation et traduction des incidents
-web/                  interface (HTML, CSS, JavaScript)
-packaging/            recette PyInstaller, script Inno Setup, icône
-.github/workflows/    chaîne de publication
-```
-
-Où vivent les fichiers, selon la manière dont l'application est lancée :
-
-| | Version installée | Version source |
-|---|---|---|
-| Programme | `%LOCALAPPDATA%\Programs\WhiScribe` | le dépôt cloné |
-| Réglages, journaux, glossaire | `%LOCALAPPDATA%\WhiScribe` | à côté du script |
-| Modèles | choisi à l'installation, modifiable dans les réglages | `modeles/`, modifiable dans les réglages |
-
-La séparation vient d'un besoin concret : un dossier de programme peut être en lecture seule, une application n'a pas à y écrire. `app/chemins.py` détecte le cas et rien d'autre dans le code n'a à s'en préoccuper.
+- **Windows 64-bit only.** The code is portable, but hardware detection and the launch scripts target Windows. The interface relies on Microsoft Edge WebView2 Runtime, shipped with Windows 11 and up to date Windows 10; the setup installs it if missing.
+- **One spoken language per recording.** Mixing languages inside the same conversation is handled poorly: Whisper settles on one language and transcribes the rest through it. English terms scattered through a French discussion are a different matter, and that is exactly what the glossary is for.
+- **Designed for French first,** which is where it was tested most. Quality is equal or better in English and in the languages Whisper covers well, and the app tells you what to expect under the language selector: excellent, good, or variable.
+- **The first run needs an internet connection** to download the model, 1.6 to 3.1 GB depending on the preset. After that, never again.
+- **No AMD or Intel GPU acceleration.** Those machines transcribe on the processor.
+- **Speaker separation is not in the setup.** It needs the source install, about 2.5 GB of dependencies and a Hugging Face token. Without it, everything else works.
+- **The installer is not signed.** SmartScreen may warn on first run. A code signing certificate costs several hundred euros a year, which makes no sense for a free personal tool.
+- **Audio is decoded entirely in memory,** about 230 MB per hour of recording. Comfortable up to several hours, but this is not stream processing.
+- **Speaker labels are useful, not authoritative.** Overlapping speech and distant voices are the hard cases. Setting the number of participants improves the split noticeably.
 
 ---
 
-## Limites connues
+## Run from source
 
-- **Windows uniquement** en pratique. Le code est portable, mais la détection matérielle et les scripts de lancement visent Windows.
-- **Aucune accélération AMD ou Intel en v1.** Ces machines transcrivent sur processeur. Voir « Ouvertures matérielles prévues ».
-- **La séparation des locuteurs n'est pas dans le programme d'installation.** Elle demande la version source, environ 2,5 Go de dépendances et un jeton Hugging Face. Sans elle, tout le reste fonctionne.
-- **Le premier lancement a besoin d'Internet** pour télécharger le modèle, de 1,6 à 3,1 Go selon le preset. L'application l'annonce avant de commencer, et le dit clairement si le poste est hors ligne. Ensuite, plus jamais.
-- **Le programme d'installation n'est pas signé.** SmartScreen peut afficher un avertissement au premier lancement : « Informations complémentaires », puis « Exécuter quand même ». Une signature de code coûte plusieurs centaines d'euros par an, ce qui n'a pas de sens pour un outil personnel et gratuit.
-- **L'audio est décodé entièrement en mémoire** : environ 230 Mo par heure d'enregistrement. Confortable jusqu'à plusieurs heures, mais ce n'est pas du traitement en flux.
-- **Les estimations de durée sont des estimations.** Le temps réel mesuré est affiché après coup.
-- **La diarisation n'est pas infaillible** sur les chevauchements et les voix lointaines.
+Only two reasons to go this way: **change the code**, or get **speaker separation**. For normal use, the setup above is enough.
 
----
+1. Install [Python 3.9 or newer](https://www.python.org/downloads/), ticking **Add python.exe to PATH**.
+2. Double-click **`installer.bat`**.
+3. Answer the question about speaker separation, then let it run.
+4. Double-click **`lancer.bat`**.
 
-## Installation depuis les sources (développeurs, et séparation des locuteurs)
+The installer is re-runnable, only installs what is missing, and creates an isolated environment in `.venv` without touching the system Python. It needs neither administrator rights, nor winget, nor Chocolatey: FFmpeg comes from a Python package that ships the binary.
 
-Cette voie ne s'adresse qu'à deux cas : **modifier le code**, ou **obtenir la séparation des locuteurs**, qui n'est pas dans le programme d'installation. Pour tout usage normal, la section « [Installation](#installation) » en tête de ce fichier suffit.
-
-### Automatique
-
-1. Installez [Python 3.9 ou plus récent](https://www.python.org/downloads/) en cochant **« Add python.exe to PATH »**.
-2. Double-cliquez sur **`installer.bat`**.
-3. Répondez à la question sur la séparation des locuteurs, puis laissez faire.
-4. Double-cliquez sur **`lancer.bat`**.
-
-L'installateur est **relançable** : il ne réinstalle que ce qui manque. Il crée un environnement Python isolé dans `.venv`, sans toucher au Python du système.
-
-Il n'a besoin **ni de droits administrateur, ni de winget, ni de Chocolatey**. FFmpeg est posé par un paquet Python qui embarque le binaire, donc rien à ajouter au `PATH`.
-
-| Option | Effet |
+| Option | Effect |
 |---|---|
-| `installer.bat` | Installation standard, pose la question sur les locuteurs |
-| `installer.bat --locuteurs` | Ajoute la séparation des locuteurs (PyTorch + pyannote) |
-| `installer.bat --sans-locuteurs` | Installation légère, sans question |
-| `installer.bat --verifier` | N'affiche que le bilan de l'état du poste |
+| `installer.bat` | Standard install, asks about speakers |
+| `installer.bat --locuteurs` | Adds speaker separation (PyTorch and pyannote) |
+| `installer.bat --sans-locuteurs` | Light install, no question |
+| `installer.bat --verifier` | Prints the state of the machine and exits |
 
-Lancée depuis les sources, l'application range tout à côté du script : `config.json`, `logs/`, `modeles/`, glossaire et corrections. C'est la seule différence de comportement avec la version installée, qui écrit dans `%LOCALAPPDATA%\WhiScribe`.
+Run from source, the app keeps everything next to the script: `config.json`, `logs/`, `modeles/`, glossary and corrections. That is the only behavioural difference with the installed version.
 
-### Manuelle
-
-Pour qui préfère garder la main.
+<details>
+<summary>Manual install, for those who prefer to keep control</summary>
 
 ```bat
 python -m venv .venv
@@ -321,65 +175,125 @@ python -m venv .venv
 
 pip install -r requirements.txt
 
-REM Seulement si une carte NVIDIA est présente : évite l'erreur
-REM « cublas64_12.dll introuvable » sans toucher au PATH système.
+REM Only with an NVIDIA card: avoids the "cublas64_12.dll not found" error
+REM without touching the system PATH.
 pip install nvidia-cublas-cu12 nvidia-cudnn-cu12==9.*
 
-REM Seulement si vous voulez la séparation des locuteurs.
-REM Sans carte NVIDIA :
+REM Only for speaker separation. Without an NVIDIA card:
 pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
-REM Avec carte NVIDIA :
+REM With an NVIDIA card:
 pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu124
 pip install -r requirements-locuteurs.txt
 
 .venv\Scripts\pythonw transcriber.pyw
 ```
 
-Le socle fait environ 250 Mo. La séparation des locuteurs ajoute à peu près 2,5 Go, parce qu'elle tire PyTorch : c'est précisément pourquoi elle est optionnelle, et pourquoi elle reste hors du programme d'installation.
+The base is about 250 MB. Speaker separation adds roughly 2.5 GB because it pulls in PyTorch, which is precisely why it is optional and why it stays out of the setup.
 
-### Contrôler l'état du poste
+Check the state of the machine, the FFmpeg decoder, the work folders and hardware detection:
 
 ```bat
 .venv\Scripts\python transcriber.pyw --verifier
 ```
 
-Vérifie les composants, le décodeur FFmpeg, l'écriture des dossiers de travail et la détection matérielle, affiche un bilan, et sort avec le code 0 si tout va bien. C'est exactement ce que la chaîne de publication exécute sur l'exécutable construit.
+</details>
 
----
+<details>
+<summary>Setting up speaker separation</summary>
 
-## Fabriquer le programme d'installation
+The model that recognises voices, pyannote, is free but gated: its author asks you to accept the terms and identify yourself.
 
-La publication est automatisée : poser un tag `vX.Y.Z` sur le dépôt déclenche `.github/workflows/release.yml`, qui construit, vérifie, fabrique le programme d'installation et crée la Release avec le fichier en pièce jointe. Les notes de version sont la section correspondante de [CHANGELOG.md](CHANGELOG.md). Le même workflow se lance à la main depuis l'onglet Actions, sans tag : il construit et vérifie tout, mais ne publie rien.
+1. Create an account on [huggingface.co](https://huggingface.co).
+2. Open [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) and accept the terms.
+3. Create a **Read** access token in your account settings.
+4. Paste it into the Speakers panel of the app.
 
-Pour reproduire la chaîne sur un poste Windows :
+The token is saved in `jeton_hf.txt`, with your data, and is never versioned. The `HF_TOKEN` environment variable is recognised too, and takes precedence. Without a token everything still works, simply without labels and with a clear message rather than an error.
+
+Whisper and pyannote are **sequenced**, never loaded at the same time: the app transcribes, releases the Whisper model explicitly, forces a garbage collection, then loads diarisation. Peaks follow each other instead of adding up, so `large-v3` plus pyannote fit in 16 GB.
+
+</details>
+
+<details>
+<summary>How the project is laid out</summary>
+
+One engine, faster-whisper on CTranslate2. whisperX was removed: it forces PyTorch, its word level alignment is not needed here, its VAD is now built into faster-whisper, and driving a library rather than a subprocess gives per segment progress, exact control over memory release between stages, typed errors, and access to the model tokeniser to measure the prompt budget precisely.
+
+```
+transcriber.pyw       window, bridge to the interface, --verifier mode
+installer.py          re-runnable installer, source version
+app/
+  chemins.py          locations, source or installed version
+  materiel.py         processor, memory, GPU and NPU detection
+  presets.py          presets, estimates, memory guardrails
+  audio.py            FFmpeg, duration, 16 kHz mono decoding
+  moteur.py           faster-whisper, loading and release
+  diarisation.py      pyannote, token, speaker attribution
+  vocabulaire.py      glossary, prompt, corrections
+  sorties.py          txt, srt, vtt, headers
+  nommage.py          output file name pattern
+  surveillance.py     watched folder, polling and memory
+  stockage.py         disk usage of models, data and program
+  maj.py              optional check of published releases
+  barre_taches.py     Windows taskbar progress
+  compagnon.py        .json file of word by word confidence
+  lecture.py          reading view, learned corrections, copy for AI
+  gabarit.py          instruction template for an AI assistant
+  reprise.py          progressive saving and resume after interruption
+  traitement.py       sequential queue
+  config.py           configuration
+  journal.py          logging and translation of incidents
+  langues.py          French and English catalogues, Python side
+web/                  interface (HTML, CSS, JavaScript), langues.js
+outils/               measurement and verification harnesses, outside the app
+packaging/            PyInstaller recipe, Inno Setup script, icon
+.github/workflows/    release pipeline
+```
+
+Where files live, depending on how the app was started:
+
+| | Installed version | Source version |
+|---|---|---|
+| Program | `%LOCALAPPDATA%\Programs\WhiScribe` | the cloned repository |
+| Settings, logs, glossary | `%LOCALAPPDATA%\WhiScribe` | next to the script |
+| Models | chosen at install time, changeable in the settings | `modeles/`, changeable in the settings |
+
+</details>
+
+<details>
+<summary>Building the installer</summary>
+
+Publication is automated: pushing a `vX.Y.Z` tag triggers `.github/workflows/release.yml`, which builds, verifies, produces the setup and creates the Release with the file attached. Release notes are the matching section of [CHANGELOG.md](CHANGELOG.md). The same workflow runs by hand from the Actions tab, without a tag: it builds and verifies everything but publishes nothing.
 
 ```bat
 pip install -r requirements.txt -r requirements-build.txt
 pyinstaller --noconfirm --clean --distpath dist --workpath build packaging\whiscribe.spec
 dist\WhiScribe\whiscribe-verifier.exe
-iscc /DVersionApp=2.0.0 packaging\setup.iss
+iscc /DVersionApp=2.2.0 packaging\setup.iss
 ```
 
-| Fichier | Rôle |
-|---|---|
-| `packaging/whiscribe.spec` | Recette PyInstaller, mode `onedir`. Produit `dist\WhiScribe\` |
-| `packaging/setup.iss` | Script Inno Setup. Produit `packaging\sortie\WhiScribe-Setup-X.Y.Z.exe` |
-| `packaging/whiscribe.ico` | Icône de l'application et du programme d'installation |
-| `packaging/generer_icone.py` | Régénère l'icône, sans aucune dépendance |
-| `requirements-build.txt` | Outils de construction. **PyInstaller 6.22 minimum**, les versions antérieures ne savent pas geler numpy 2.5 |
+The version number has a single source, `VERSION` in `app/__init__.py`, and the workflow refuses to publish if the tag does not match. PyInstaller 6.22 is the minimum: earlier versions cannot freeze numpy 2.5.
 
-Le numéro de version a **une seule source** : `VERSION` dans `app/__init__.py`. Le workflow refuse de publier si le tag ne lui correspond pas.
+A release that cannot update in place is announced by writing `[reinstallation-requise]` anywhere in its CHANGELOG section. The update banner then tells the user to uninstall first, and that data and models are kept, which is true since they live outside the program folder.
+
+</details>
 
 ---
 
-## Si la fenêtre ne s'ouvre pas
+## Diagnostics
 
-L'interface s'appuie sur **Microsoft Edge WebView2 Runtime**, présent d'origine sur Windows 11 et sur les Windows 10 à jour. Le programme d'installation le pose s'il manque ; en version source, installez-le depuis le site de Microsoft puis relancez. L'application affiche ce message plutôt qu'une erreur technique.
+Every failure is explained in the interface, in plain language: unreadable file, model to download, not enough memory, missing or invalid token, full disk, missing CUDA libraries. No traceback ever reaches the screen.
+
+The technical detail goes to a timestamped file in `logs/`, whose name is quoted in the error message. The **Open the detailed log** button, in the bottom bar, opens it directly. The last 30 logs are kept. That file is what to attach to a bug report, and the logs are written in French: they are aimed at the maintainer, not at the user.
 
 ---
 
-## Licence
+## Contributing
 
-MIT, voir [LICENSE](LICENSE).
+Issues and small pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Cet outil s'appuie sur des projets libres : [faster-whisper](https://github.com/SYSTRAN/faster-whisper) et [CTranslate2](https://github.com/OpenNMT/CTranslate2), les modèles [Whisper](https://github.com/openai/whisper) d'OpenAI, [pyannote.audio](https://github.com/pyannote/pyannote-audio), [pywebview](https://pywebview.flowrl.com/) et [FFmpeg](https://ffmpeg.org/).
+## License
+
+MIT, see [LICENSE](LICENSE). Version history in [CHANGELOG.md](CHANGELOG.md).
+
+Built on free software: [faster-whisper](https://github.com/SYSTRAN/faster-whisper) and [CTranslate2](https://github.com/OpenNMT/CTranslate2), the [Whisper](https://github.com/openai/whisper) models from OpenAI, [pyannote.audio](https://github.com/pyannote/pyannote-audio), [pywebview](https://pywebview.flowrl.com/) and [FFmpeg](https://ffmpeg.org/).

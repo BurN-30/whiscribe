@@ -14,14 +14,14 @@ from __future__ import annotations
 
 import gc
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
 import numpy as np
 
 from . import audio as audio_module
-from . import chemins, journal, presets
+from . import chemins, journal, langues, presets
 from .journal import ErreurLisible
 from .materiel import Materiel
 
@@ -31,11 +31,28 @@ REPLI_TEMPERATURE = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
 
 
 @dataclass
+class Mot:
+    """
+    Un mot et la probabilité que le modèle lui accorde.
+
+    faster-whisper la fournit d'origine avec `word_timestamps=True`, sans
+    surcoût notable. Elle sert à signaler dans la vue de lecture les passages
+    entendus avec le moins de certitude, ceux qu'il vaut mieux réécouter.
+    """
+
+    texte: str
+    debut: float
+    fin: float
+    probabilite: float
+
+
+@dataclass
 class Segment:
     debut: float
     fin: float
     texte: str
     locuteur: str = ""
+    mots: list[Mot] = field(default_factory=list)
 
 
 def identifiant_depot(modele: str) -> str:
@@ -93,18 +110,14 @@ class MoteurTranscription:
 
         if signaler and not modele_deja_telecharge(modele):
             taille = taille_annoncee(modele)
-            signaler(
-                "attention",
-                f"Premier usage de ce modèle : téléchargement d'environ {taille}. "
-                "Cela n'arrive qu'une fois, ensuite tout reste sur la machine.",
-            )
+            signaler("attention", langues.t("moteur.premier_usage", taille=taille))
 
         journal.info(
             "Chargement du modèle %s (périphérique=%s, calcul=%s, fils=%s)",
             modele, self.peripherique, self.type_calcul, self.materiel.fils_calcul,
         )
         if signaler:
-            signaler("info", f"Chargement du modèle {_nom_court(modele)}...")
+            signaler("info", langues.t("moteur.chargement", modele=_nom_court(modele)))
 
         try:
             with journal.SortieMuette("chargement du modèle"):
@@ -145,11 +158,24 @@ class MoteurTranscription:
         amorce: str = "",
         progression: Callable[[float], None] | None = None,
         interrompu: Callable[[], bool] | None = None,
+        decalage: float = 0.0,
+        sur_segment: Callable[[Segment], None] | None = None,
     ) -> tuple[list[Segment], dict]:
+        """
+        Transcrit un signal déjà décodé.
+
+        `decalage` déplace tous les horodatages : il vaut zéro en temps normal,
+        et la position atteinte quand on reprend une transcription interrompue,
+        où seule la fin du signal est repassée au modèle.
+
+        `sur_segment` est appelé pour chaque segment dès qu'il sort du décodeur.
+        C'est le point d'accroche de la sauvegarde progressive : le moteur
+        produit déjà les segments un par un, rien n'est mis en tampon pour lui.
+        """
         if self._modele is None:
             raise ErreurLisible(
-                "Modèle non chargé",
-                "La transcription a été demandée avant le chargement du modèle.",
+                langues.t("moteur.non_charge.titre"),
+                langues.t("moteur.non_charge.msg"),
             )
 
         beam = int(reglages.get("beam_size") or 5)
@@ -185,9 +211,17 @@ class MoteurTranscription:
                     raise Interruption()
                 texte = (brut.text or "").strip()
                 if texte:
-                    segments.append(Segment(debut=brut.start, fin=brut.end, texte=texte))
+                    segment = Segment(
+                        debut=brut.start + decalage,
+                        fin=brut.end + decalage,
+                        texte=texte,
+                        mots=_mots_du_segment(brut, decalage),
+                    )
+                    segments.append(segment)
+                    if sur_segment is not None:
+                        sur_segment(segment)
                 if progression and duree_totale > 0:
-                    progression(min(0.99, brut.end / duree_totale))
+                    progression(min(0.99, (brut.end + decalage) / duree_totale))
 
         if progression:
             progression(1.0)
@@ -205,6 +239,28 @@ class MoteurTranscription:
             len(segments), details["langue"],
         )
         return segments, details
+
+
+def _mots_du_segment(brut, decalage: float = 0.0) -> list[Mot]:
+    """
+    Extrait les mots et leur probabilité d'un segment de faster-whisper.
+
+    Le décodeur les fournit déjà, `word_timestamps` étant activé pour attribuer
+    les locuteurs. Un modèle ou une version qui ne les donnerait pas renvoie
+    simplement une liste vide, et la vue de lecture s'en passe.
+    """
+    resultat: list[Mot] = []
+    for mot in getattr(brut, "words", None) or []:
+        texte = (getattr(mot, "word", "") or "").strip()
+        if not texte:
+            continue
+        resultat.append(Mot(
+            texte=texte,
+            debut=float(getattr(mot, "start", 0.0) or 0.0) + decalage,
+            fin=float(getattr(mot, "end", 0.0) or 0.0) + decalage,
+            probabilite=float(getattr(mot, "probability", 0.0) or 0.0),
+        ))
+    return resultat
 
 
 class Interruption(Exception):
@@ -241,13 +297,13 @@ def connexion_disponible(delai: float = 4.0) -> bool:
 
 
 def taille_annoncee(modele: str) -> str:
-    for entree in presets.MODELES_AVANCES:
-        if entree["cle"] == modele:
-            return entree["taille"]
+    taille = presets.taille_modele_avance(modele)
+    if taille:
+        return taille
     for p in presets.PRESETS.values():
         if p["modele"] == modele:
-            return f"{p['telechargement_go']:.1f} Go".replace(".", ",")
-    return "quelques centaines de Mo à 3 Go"
+            return langues.octets(p["telechargement_go"] * 1024 ** 3)
+    return langues.t("moteur.taille_inconnue")
 
 
 def limiter_parallelisme(fils: int) -> None:

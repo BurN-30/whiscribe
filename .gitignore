@@ -13,10 +13,14 @@ packaging/sortie/
 config.json
 jeton_hf.txt
 dossier-modeles.txt
+gabarit-ia.txt
 
 # Produits par l'application
 logs/
 modeles/
+reprises/
+maj-etat.json
+surveillance-vus.json
 _ffmpeg/
 
 # Système

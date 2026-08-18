@@ -86,6 +86,10 @@ FICHIER_VOCABULAIRE = RACINE / "vocabulaire.txt"
 FICHIER_CORRECTIONS = RACINE / "corrections.txt"
 FICHIER_JETON_HF = RACINE / "jeton_hf.txt"
 
+#: Gabarit d'instructions pour un assistant IA, créé au premier usage du bouton
+#: « Copier pour l'IA ». Voir `app/gabarit.py`.
+FICHIER_GABARIT_IA = RACINE / "gabarit-ia.txt"
+
 #: Modèles d'exemple livrés avec le programme, recopiés au premier lancement.
 MODELES_FICHIERS_EXEMPLE = {
     FICHIER_VOCABULAIRE: DOSSIER_RESSOURCES / "vocabulaire.txt",
@@ -157,17 +161,19 @@ def dossier_modeles_inscriptible(chemin: str | Path) -> str:
     Vérifie qu'un dossier de modèles est utilisable. Renvoie un message d'erreur
     en français, ou une chaîne vide si tout va bien.
     """
+    from . import langues
+
     cible = Path(str(chemin)).expanduser()
     try:
         cible.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        return f"Ce dossier n'a pas pu être créé ({exc.strerror or exc})."
+        return langues.t("chemin.dossier_non_cree", erreur=exc.strerror or exc)
     temoin = cible / ".ecriture-test"
     try:
         temoin.write_text("ok", encoding="utf-8")
         temoin.unlink(missing_ok=True)
     except OSError:
-        return "Ce dossier n'est pas accessible en écriture."
+        return langues.t("chemin.dossier_non_ecrivable")
     return ""
 
 

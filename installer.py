@@ -156,7 +156,7 @@ def demander_locuteurs() -> bool:
 def verifier_python() -> bool:
     etape("1/6", "Version de Python")
     version = sys.version_info
-    info(f"{platform.python_version()} — {sys.executable}")
+    info(f"{platform.python_version()} : {sys.executable}")
     if version < PYTHON_MINIMUM:
         echec(f"Python {PYTHON_MINIMUM[0]}.{PYTHON_MINIMUM[1]} ou plus récent est nécessaire.")
         info("Téléchargez-le sur https://www.python.org/downloads/")
@@ -262,7 +262,7 @@ def verifier(locuteurs_demandes: bool) -> bool:
         if module_present(module):
             ok(etiquette)
         else:
-            echec(etiquette + " — manquant")
+            echec(etiquette + " : manquant")
             tout_va_bien = False
 
     # FFmpeg embarqué
@@ -270,7 +270,7 @@ def verifier(locuteurs_demandes: bool) -> bool:
     if subprocess.run([str(python_du_venv()), "-c", code], capture_output=True).returncode == 0:
         ok("décodeur audio (FFmpeg embarqué)")
     else:
-        echec("décodeur audio (FFmpeg) — manquant")
+        echec("décodeur audio (FFmpeg) : manquant")
         tout_va_bien = False
 
     if module_present("psutil"):
@@ -319,7 +319,7 @@ def principal() -> int:
     analyseur.add_argument("--verifier", action="store_true")
     arguments, _ = analyseur.parse_known_args()
 
-    titre("WhiScribe — installation")
+    titre("WhiScribe, installation")
     print("  Transcription audio, 100 % sur votre machine.")
     print("  Rien de ce que vous transcrivez ne quitte ce poste.")
 

@@ -9,6 +9,9 @@ Deux leviers complémentaires contre les noms propres écorchés :
    fenêtre de contexte du modèle, soit 224 jetons. Au-delà, faster-whisper
    tronque par la fin, donc silencieusement. On tronque nous-mêmes, proprement,
    en gardant les termes du DÉBUT de la liste, et on le signale dans l'interface.
+   L'amorce étant lue par le décodeur comme un début de texte, sa phrase
+   d'introduction suit la LANGUE PARLÉE de l'enregistrement, jamais celle de
+   l'interface : une phrase française biaiserait le modèle vers le français.
 
 2. CORRECTIONS (`corrections.txt`). Table `forme_erronée => forme_correcte`
    appliquée au texte final, mot entier, insensible à la casse. Pour les
@@ -20,7 +23,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from . import chemins, journal
+from . import chemins, journal, langues
 
 # Whisper réserve la moitié de ses 448 jetons de contexte à l'amorce.
 LIMITE_JETONS_AMORCE = 224
@@ -30,7 +33,40 @@ MARGE_JETONS = 24
 # les noms propres tournent autour de 3 caractères par jeton, on reste prudent.
 CARACTERES_PAR_JETON = 3.0
 
-ENTETE_AMORCE = "Vocabulaire de cet enregistrement : "
+#: En-tête de l'amorce, dans la LANGUE PARLÉE de l'enregistrement.
+#:
+#: L'amorce est un prompt : le décodeur la lit comme un début de contexte, donc
+#: une phrase française biaise le modèle vers le français. Elle doit suivre la
+#: langue parlée choisie pour la transcription, réglage « langue », et non la
+#: langue de l'interface. Toute langue autre que le français prend l'anglais,
+#: qui est le repli du modèle comme celui de l'application.
+ENTETES_AMORCE = {
+    "fr": "Vocabulaire de cet enregistrement : ",
+    "en": "Vocabulary for this recording: ",
+}
+
+
+def _langue_parlee_courante() -> str:
+    """Langue parlée du réglage courant. Import tardif : `config` lit `langues`."""
+    try:
+        from . import config as config_module
+
+        return str(config_module.charger().get("langue", "fr") or "")
+    except Exception:  # pragma: no cover - un réglage illisible ne bloque pas
+        return "fr"
+
+
+def entete_amorce(langue: str | None = None) -> str:
+    """
+    En-tête de l'amorce pour une langue parlée donnée.
+
+    `None` va chercher le réglage courant. Une langue vide, c'est-à-dire la
+    détection automatique, prend l'anglais : on ne sait pas ce qui sera parlé,
+    autant ne pas pousser le décodeur vers le français.
+    """
+    code = langue if langue is not None else _langue_parlee_courante()
+    code = str(code or "").strip().lower()[:2]
+    return ENTETES_AMORCE.get(code, ENTETES_AMORCE["en"])
 
 
 # ---------------------------------------------------------------------------
@@ -82,15 +118,24 @@ def _compter_jetons(texte: str, tokeniseur=None) -> int:
     return int(len(texte) / CARACTERES_PAR_JETON) + 1
 
 
-def construire_amorce(contenu: str | None = None, tokeniseur=None) -> dict:
+def construire_amorce(contenu: str | None = None, tokeniseur=None,
+                      langue: str | None = None) -> dict:
     """
     Fabrique l'amorce à passer en `initial_prompt`.
+
+    `langue` est la langue PARLÉE de l'enregistrement, pas celle de l'interface :
+    elle décide de l'en-tête, et donc de la langue vers laquelle l'amorce biaise
+    le décodeur. `None` reprend le réglage courant.
 
     Renvoie un dictionnaire : `amorce`, `nb_termes`, `nb_retenus`, `tronque`,
     `jetons`, `message`. La troncature garde l'ordre du fichier : les premiers
     termes sont les plus importants, c'est écrit dans l'en-tête de
     `vocabulaire.txt` et rappelé dans l'interface.
+
+    Le budget de jetons est compté sur la forme réellement envoyée, en-tête
+    compris : un en-tête plus court ne fait pas mentir le décompte affiché.
     """
+    entete = entete_amorce(langue)
     liste = termes(contenu)
     if not liste:
         return {
@@ -99,17 +144,17 @@ def construire_amorce(contenu: str | None = None, tokeniseur=None) -> dict:
             "nb_retenus": 0,
             "tronque": False,
             "jetons": 0,
-            "message": "Glossaire vide : aucune amorce envoyée au modèle.",
+            "message": langues.t("voc.glossaire_vide"),
         }
 
     budget = LIMITE_JETONS_AMORCE - MARGE_JETONS
     retenus: list[str] = []
     for terme in liste:
-        candidat = ENTETE_AMORCE + ", ".join(retenus + [terme]) + "."
+        candidat = entete + ", ".join(retenus + [terme]) + "."
         if _compter_jetons(candidat, tokeniseur) > budget and retenus:
             break
         retenus.append(terme)
-        if _compter_jetons(ENTETE_AMORCE + ", ".join(retenus) + ".", tokeniseur) > budget:
+        if _compter_jetons(entete + ", ".join(retenus) + ".", tokeniseur) > budget:
             retenus.pop()
             break
 
@@ -120,23 +165,22 @@ def construire_amorce(contenu: str | None = None, tokeniseur=None) -> dict:
             "nb_retenus": 0,
             "tronque": True,
             "jetons": 0,
-            "message": "Le premier terme dépasse déjà la limite de l'amorce.",
+            "message": langues.t("voc.premier_trop_long"),
         }
 
-    amorce = ENTETE_AMORCE + ", ".join(retenus) + "."
+    amorce = entete + ", ".join(retenus) + "."
     jetons = _compter_jetons(amorce, tokeniseur)
     tronque = len(retenus) < len(liste)
 
     if tronque:
-        message = (
-            f"{len(retenus)} termes sur {len(liste)} tiennent dans l'amorce "
-            f"({jetons} jetons sur {LIMITE_JETONS_AMORCE} possibles). Les suivants "
-            "sont ignorés : placez les plus importants en haut du fichier."
+        message = langues.t(
+            "voc.amorce_tronquee", retenus=len(retenus), total=len(liste),
+            jetons=jetons, limite=LIMITE_JETONS_AMORCE,
         )
     else:
-        message = (
-            f"{len(retenus)} termes envoyés au modèle ({jetons} jetons sur "
-            f"{LIMITE_JETONS_AMORCE})."
+        message = langues.t(
+            "voc.amorce_ok", retenus=len(retenus), jetons=jetons,
+            limite=LIMITE_JETONS_AMORCE,
         )
 
     return {
@@ -193,20 +237,20 @@ def analyser_corrections(contenu: str | None = None) -> tuple[list[Correction], 
         if not texte or texte.startswith("#"):
             continue
         if "=>" not in texte:
-            erreurs.append(f"Ligne {numero} : il manque la flèche « => ».")
+            erreurs.append(langues.t("voc.err.fleche", ligne=numero))
             continue
         source, _, cible = texte.partition("=>")
         source, cible = source.strip(), cible.strip()
         if not source:
-            erreurs.append(f"Ligne {numero} : la forme à corriger est vide.")
+            erreurs.append(langues.t("voc.err.source_vide", ligne=numero))
             continue
         if not cible:
-            erreurs.append(f"Ligne {numero} : la forme correcte est vide.")
+            erreurs.append(langues.t("voc.err.cible_vide", ligne=numero))
             continue
         try:
             regles.append(Correction(source, cible))
         except re.error as exc:
-            erreurs.append(f"Ligne {numero} : règle illisible ({exc}).")
+            erreurs.append(langues.t("voc.err.illisible", ligne=numero, detail=exc))
 
     return regles, erreurs
 
@@ -222,9 +266,105 @@ def appliquer(texte: str, regles: list[Correction]) -> tuple[str, int]:
     return texte, total
 
 
-def resume_glossaire() -> dict:
+# ---------------------------------------------------------------------------
+# Corrections apprises depuis la vue de lecture
+# ---------------------------------------------------------------------------
+
+#: Titre de la section où sont rangées les règles ajoutées d'un clic depuis une
+#: transcription. Les règles écrites à la main gardent leur place, en haut.
+#:
+#: Le titre est écrit dans la langue d'interface du moment, mais TOUTES les
+#: langues connues sont reconnues à la relecture : un `corrections.txt` créé en
+#: français ne se voit pas ajouter une seconde section quand l'interface passe
+#: en anglais. Un fichier existant n'est jamais retraduit.
+
+
+def titre_section_apprises() -> str:
+    return langues.t("voc.section_apprises")
+
+
+def titres_section_connus() -> tuple[str, ...]:
+    return tuple(dict.fromkeys(
+        langues.TEXTES[code]["voc.section_apprises"] for code in langues.LANGUES
+    ))
+
+#: Une règle est faite pour un mot ou une courte expression, pas pour un
+#: paragraphe entier : au-delà, on ne corrige plus, on réécrit.
+LONGUEUR_MAX_REGLE = 80
+
+
+def verifier_regle(source: str, cible: str) -> str:
+    """Contrôle une règle avant écriture. Renvoie un refus en français, ou ''."""
+    source = " ".join((source or "").split())
+    cible = " ".join((cible or "").split())
+    if not source:
+        return langues.t("regle.selection_vide")
+    if not cible:
+        return langues.t("regle.cible_vide")
+    if source.lower() == cible.lower():
+        return langues.t("regle.identique")
+    for valeur, cle_etiquette in ((source, "regle.etiquette.source"),
+                                  (cible, "regle.etiquette.cible")):
+        if len(valeur) > LONGUEUR_MAX_REGLE:
+            return langues.t(
+                "regle.trop_longue",
+                etiquette=langues.t(cle_etiquette), max=LONGUEUR_MAX_REGLE,
+            )
+        if "=>" in valeur:
+            return langues.t("regle.fleche_interdite")
+        if valeur.startswith("#"):
+            return langues.t("regle.diese_interdit")
+    return ""
+
+
+def ajouter_correction_apprise(source: str, cible: str, fichier: Path | None = None) -> dict:
+    """
+    Ajoute une règle à `corrections.txt`, dans la section des règles apprises.
+
+    Une règle dont la forme entendue est déjà couverte n'est pas ajoutée une
+    seconde fois : le fichier doit rester lisible et modifiable à la main.
+    """
+    source = " ".join((source or "").split())
+    cible = " ".join((cible or "").split())
+    probleme = verifier_regle(source, cible)
+    if probleme:
+        return {"ajoutee": False, "message": probleme}
+
+    contenu = lire_corrections(fichier)
+    for ligne in contenu.splitlines():
+        texte = ligne.strip()
+        if not texte or texte.startswith("#") or "=>" not in texte:
+            continue
+        gauche, _, droite = texte.partition("=>")
+        if " ".join(gauche.split()).lower() == source.lower():
+            if " ".join(droite.split()).lower() == cible.lower():
+                return {"ajoutee": False, "message": langues.t("regle.deja_enregistree")}
+            return {
+                "ajoutee": False,
+                "message": langues.t(
+                    "regle.conflit", source=source, cible=" ".join(droite.split())),
+            }
+
+    lignes = contenu.rstrip("\n").splitlines()
+    connus = titres_section_connus()
+    if not any(ligne.strip() in connus for ligne in lignes):
+        if lignes:
+            lignes.append("")
+        lignes.append(titre_section_apprises())
+        lignes.append(langues.t("voc.section_commentaire"))
+    lignes.append(f"{source} => {cible}")
+
+    ecrire_corrections("\n".join(lignes), fichier)
+    journal.info("Correction apprise : « %s » vers « %s »", source, cible)
+    return {
+        "ajoutee": True,
+        "message": langues.t("regle.ajoutee", source=source, cible=cible),
+    }
+
+
+def resume_glossaire(langue: str | None = None) -> dict:
     """État affiché dans le panneau de réglages, sans charger de modèle."""
-    info = construire_amorce()
+    info = construire_amorce(langue=langue)
     regles, erreurs = analyser_corrections()
     info["nb_corrections"] = len(regles)
     info["erreurs_corrections"] = erreurs
