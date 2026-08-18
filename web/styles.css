@@ -344,6 +344,16 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Dossier des modèles : le chemin peut être long, il ne doit jamais déborder. */
 .bloc-reglage > .sous-libelle { font-size: 11.5px; color: var(--texte-faible); }
 .bloc-reglage > .aide { display: block; font-size: 11.5px; color: var(--texte-faible); margin-top: 8px; }
+
+/* Séparation des locuteurs : trois états qui se remplacent dans le même bloc,
+   absente, en cours d'installation, installée. Les styles du bloc de réglage
+   visent les enfants directs, il faut donc les redire pour ce niveau de plus. */
+.etape-extension > .sous-libelle { display: block; font-size: 11.5px; color: var(--texte-faible); }
+.etape-extension > .aide { display: block; font-size: 11.5px; color: var(--texte-faible); margin-top: 8px; }
+.etape-extension .ext-chiffres { margin-top: 4px; font-variant-numeric: tabular-nums; }
+/* La largeur suit la progression au rythme du reste de l'interface. */
+#ext-barre { transition: width var(--vitesse) ease; }
+#ext-en-cours .barre { margin-top: 9px; }
 .chemin-modeles {
   font-size: 11.5px; color: var(--texte-doux); margin-top: 4px;
   background: var(--carte-creuse); border: 1px solid var(--bordure);

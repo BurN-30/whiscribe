@@ -12,6 +12,14 @@ Option de diagnostic, utilisée par la chaîne de publication :
 
 vérifie les imports, la présence de FFmpeg et l'écriture des dossiers de
 travail, affiche un bilan, et sort avec le code 0 si tout va bien.
+
+Options d'extension, sans fenêtre elles non plus. C'est par elles que
+l'application s'installe à elle-même la séparation des locuteurs, en se
+relançant dans un processus de fond : voir `app/extensions.py`.
+
+    transcriber.pyw --installer-locuteurs [--cible DOSSIER] [--cpu|--cuda]
+    transcriber.pyw --verifier-locuteurs  [--cible DOSSIER]
+    transcriber.pyw --retirer-locuteurs   [--cible DOSSIER]
 """
 
 from __future__ import annotations
@@ -29,7 +37,19 @@ if not getattr(sys, "frozen", False):
     if str(RACINE) not in sys.path:
         sys.path.insert(0, str(RACINE))
 
-from app import VERSION, NOM_APPLICATION, chemins, journal, langues  # noqa: E402
+from app import VERSION, NOM_APPLICATION, chemins, extensions, journal, langues  # noqa: E402
+
+# Le dossier d'extensions rejoint le chemin d'import AVANT tout le reste : c'est
+# là que vivent torch et pyannote quand l'utilisateur a demandé la séparation
+# des locuteurs depuis la version installée. Sans objet, et sans effet, quand le
+# dossier n'existe pas.
+extensions.activer()
+
+# Modes de fond liés aux extensions. Ils précèdent la journalisation : ces
+# processus sont lancés par l'application elle-même, ils ne doivent pas écrire
+# dans le même fichier de journal que la fenêtre qui les a lancés.
+if extensions.options_reconnues(sys.argv[1:]):
+    sys.exit(extensions.principal_cli(sys.argv[1:]))
 
 journal.demarrer()
 journal.purger()
@@ -130,6 +150,20 @@ def verification() -> int:
         resultat(True, "détection du matériel", f"{mat.fils_calcul} fils, {mat.ram_go:.0f} Go")
     except Exception as exc:
         resultat(False, "détection du matériel", f"{type(exc).__name__}: {exc}")
+
+    # Séparation des locuteurs : facultative, elle ne fait donc jamais échouer le
+    # bilan. La ligne dit ce qui est vraiment importable, pas ce qui a l'air posé :
+    # un téléchargement interrompu laisse des dossiers qui ne s'importent pas.
+    try:
+        posee, detail = extensions.modules_importables()
+    except Exception as exc:
+        posee, detail = False, f"{type(exc).__name__}: {exc}"
+    lignes.append(
+        "  INFO   séparation des locuteurs : "
+        + ("installée" if posee else "non installée")
+        + (f" ({detail})" if detail else "")
+        + (f" [{extensions.DOSSIER}]" if chemins.EST_GELE else "")
+    )
 
     lignes.append("")
     lignes.append("  Bilan : tout est en place." if tout_va_bien
@@ -236,6 +270,10 @@ class Passerelle:
             journal_ui=self._sur_journal,
             file_terminee=self._sur_file_terminee,
         )
+        #: Processus d'installation de l'extension « locuteurs », ou None.
+        #: Un seul à la fois, et l'interface le sait par `etat_locuteurs`.
+        self._installation_locuteurs = None
+        self._installation_annulee = False
         #: Dossier surveillé. Le fil ne démarre que si l'option est active.
         self.surveillant = surveillance.Surveillant(
             sur_nouveaux=self._sur_fichiers_surveilles,
@@ -352,6 +390,9 @@ class Passerelle:
                 "indisponibilite": manque_diarisation,
                 "jeton_present": diarisation.jeton_present(),
                 "guide": diarisation.guide(),
+                # Tout ce qu'il faut au panneau pour proposer l'installation :
+                # taille annoncée, place disponible, état du dossier.
+                "extension": self.etat_locuteurs(),
             },
             "reprises": self._reprises(),
             "surveillance": self.surveillant.etat(),
@@ -662,6 +703,225 @@ class Passerelle:
         if not valeur:
             return {"ok": True, "message": langues.t("app.jeton.efface")}
         return {"ok": True, "message": langues.t("app.jeton.enregistre")}
+
+    # -- extension « séparation des locuteurs » ----------------------------
+    #
+    # Toute la logique vit dans `app/extensions.py`. Ici, on ne fait que lancer
+    # le processus de fond, lire ses lignes et les retransmettre à l'interface,
+    # traduites. L'application reste utilisable pendant le téléchargement :
+    # rien de ce qui suit ne bloque le fil de la fenêtre.
+
+    def etat_locuteurs(self) -> dict:
+        etat = extensions.etat()
+        etat["en_cours"] = self._installation_locuteurs is not None
+        etat["diarisation_prete"] = diarisation.disponible()
+        etat["jeton_present"] = diarisation.jeton_present()
+        return etat
+
+    def installer_locuteurs(self) -> dict:
+        """
+        Lance l'installation. La confirmation et l'annonce de la taille ont
+        déjà eu lieu côté interface : ici, on revérifie tout de même la place
+        disponible, parce qu'un disque se remplit entre deux clics.
+        """
+        if self._installation_locuteurs is not None:
+            return {"ok": False, "message": langues.t("ext.deja_en_cours")}
+
+        assez, libre, requis = extensions.espace_suffisant()
+        if not assez:
+            return {
+                "ok": False,
+                "message": langues.t(
+                    "ext.espace_insuffisant",
+                    libre=langues.nombre(libre, 1), requis=langues.nombre(requis, 1),
+                ),
+            }
+
+        commande, dossier = extensions.commande_travailleur(["--installer-locuteurs"])
+        journal.info("Installation de la séparation des locuteurs : %s", " ".join(commande))
+        try:
+            processus = subprocess.Popen(
+                commande, cwd=dossier,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, encoding="utf-8", errors="replace", bufsize=1,
+                creationflags=_SANS_FENETRE,
+            )
+        except OSError as exc:
+            journal.exception("Processus d'installation impossible à lancer", exc)
+            return {"ok": False, "message": langues.t("ext.lancement_impossible")}
+
+        self._installation_locuteurs = processus
+        self._installation_annulee = False
+        self._fond(lambda: self._suivre_installation(processus))
+        return {"ok": True}
+
+    def annuler_installation_locuteurs(self) -> dict:
+        processus = self._installation_locuteurs
+        if processus is None:
+            return {"ok": False}
+        self._installation_annulee = True
+        try:
+            if sys.platform == "win32":
+                # Toute la descendance, pas seulement le processus lancé :
+                # depuis les sources, le travailleur lance lui-même un pip.
+                # « terminate » seul le laisserait orphelin, à télécharger
+                # dans le vide.
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(processus.pid)],
+                    capture_output=True, creationflags=_SANS_FENETRE, timeout=30,
+                )
+            else:
+                processus.terminate()
+        except Exception as exc:
+            journal.debug("Arrêt du processus d'installation : %s", exc)
+        journal.info("Installation de la séparation des locuteurs annulée")
+        return {"ok": True}
+
+    def _suivre_installation(self, processus) -> None:
+        """
+        Lit les lignes du processus de fond et les traduit pour l'interface.
+
+        Le protocole est celui de `app/extensions.py` : des lignes préfixées,
+        volontairement pauvres. Tout le reste est de la sortie brute de pip,
+        qui part au journal et nulle part ailleurs.
+        """
+        try:
+            for ligne in processus.stdout or []:
+                ligne = ligne.rstrip()
+                if not ligne.startswith(extensions.MARQUE):
+                    if ligne:
+                        journal.debug("pip : %s", ligne)
+                    continue
+                _, _, reste = ligne.partition(extensions.MARQUE)
+                evenement, _, detail = reste.partition("|")
+                self._js(f"onExtensionLocuteurs({_json(self._traduire_etape(evenement, detail))})")
+        except Exception as exc:
+            journal.exception("Lecture du processus d'installation interrompue", exc)
+
+        code = processus.wait()
+        self._installation_locuteurs = None
+        self._terminer_installation(code)
+
+    def _traduire_etape(self, evenement: str, detail: str) -> dict:
+        """Fabrique le message affiché, dans la langue de l'interface."""
+        morceaux = detail.split("|")
+        if evenement == "debut":
+            return {"phase": "debut", "message": langues.t("ext.etape.preparation"), "pct": 0}
+        if evenement == "lot":
+            numero = morceaux[0] if morceaux else "1"
+            total = morceaux[1] if len(morceaux) > 1 else "1"
+            nom = morceaux[2] if len(morceaux) > 2 else ""
+            cle = "ext.lot.locuteurs" if nom == "locuteurs" else "ext.lot.paquets"
+            # « Etape 1 sur 1 » ne dirait rien a personne : quand il n'y a
+            # qu'un lot, on annonce simplement ce qui s'installe.
+            if total == "1":
+                message = langues.t("ext.etape.installation", nom=langues.t(cle))
+            else:
+                message = langues.t("ext.etape.lot", numero=numero, total=total,
+                                    nom=langues.t(cle))
+            return {"phase": "lot", "lot": numero, "lots": total, "message": message}
+        if evenement == "paquet":
+            return {"phase": "paquet", "paquet": detail,
+                    "message": langues.t("ext.etape.paquet", paquet=detail)}
+        if evenement == "octets":
+            paquet = morceaux[0] if morceaux else ""
+            pct = int(morceaux[1]) if len(morceaux) > 1 and morceaux[1].isdigit() else 0
+            recu = int(morceaux[2]) if len(morceaux) > 2 and morceaux[2].isdigit() else 0
+            total = int(morceaux[3]) if len(morceaux) > 3 and morceaux[3].isdigit() else 0
+            return {
+                "phase": "octets", "pct": pct, "paquet": paquet,
+                "message": langues.t(
+                    "ext.etape.telechargement", paquet=paquet,
+                    recu=langues.octets(recu), total=langues.octets(total),
+                ),
+            }
+        if evenement == "pose":
+            return {"phase": "pose", "message": langues.t("ext.etape.pose")}
+        if evenement == "detail":
+            journal.attention("Installation des locuteurs : %s", detail)
+            return {"phase": "detail", "message": detail}
+        if evenement == "echec":
+            return {"phase": "detail", "message": langues.t("ext.etape.echec_lot")}
+        return {"phase": evenement, "message": ""}
+
+    def _terminer_installation(self, code: int) -> None:
+        """
+        Conclut : vérification réelle de l'import, puis activation à chaud.
+
+        La vérification tourne dans un processus neuf, et pas ici. pip n'aime
+        pas qu'on importe dans la foulée ce qu'il vient de poser, et un torch
+        chargé dans le processus de la fenêtre ne se déchargerait plus.
+        """
+        def conclure(charge: dict) -> None:
+            self._js("onFinExtensionLocuteurs(" + _json(charge) + ")")
+
+        if self._installation_annulee:
+            conclure({"etat": "annulee", "message": langues.t("ext.annulee")})
+            return
+
+        if code != 0:
+            journal.erreur("Installation de la séparation des locuteurs en échec (code %s)", code)
+            conclure({"etat": "echec", "message": langues.t("ext.echec")})
+            return
+
+        reussi, detail = self._verifier_locuteurs_hors_processus()
+        if not reussi:
+            journal.erreur("Extension posée mais inutilisable : %s", detail)
+            conclure({"etat": "echec", "message": langues.t("ext.verification_ko")})
+            return
+
+        # Activation à chaud : le dossier rejoint le chemin d'import, et
+        # `diarisation.disponible()` le voit immédiatement. Rien n'a encore
+        # importé torch dans ce processus, c'est ce qui rend la chose possible.
+        extensions.activer()
+        import importlib
+
+        importlib.invalidate_caches()
+        chaud = diarisation.disponible()
+        journal.info("Séparation des locuteurs installée (%s), activation à chaud : %s",
+                     detail or "sans détail", "oui" if chaud else "non")
+        conclure({
+            "etat": "installee",
+            "chaud": chaud,
+            "message": langues.t("ext.installee" if chaud else "ext.installee_redemarrer"),
+            "extension": self.etat_locuteurs(),
+        })
+
+    def _verifier_locuteurs_hors_processus(self) -> tuple[bool, str]:
+        commande, dossier = extensions.commande_travailleur(["--verifier-locuteurs"])
+        try:
+            sortie = subprocess.run(
+                commande, cwd=dossier, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=600,
+                creationflags=_SANS_FENETRE,
+            )
+        except Exception as exc:
+            return False, f"{type(exc).__name__}: {exc}"
+        detail = ""
+        for ligne in (sortie.stdout or "").splitlines():
+            if ligne.startswith(extensions.MARQUE):
+                _, _, reste = ligne.partition(extensions.MARQUE)
+                _, _, charge = reste.partition("|")
+                etat, _, detail = charge.partition("|")
+                return etat == "ok", detail
+        return sortie.returncode == 0, detail
+
+    def retirer_locuteurs(self) -> dict:
+        """Efface le dossier d'extensions et le cache de téléchargement."""
+        if self._installation_locuteurs is not None:
+            return {"ok": False, "message": langues.t("ext.deja_en_cours")}
+        resultat = extensions.retirer()
+        if not resultat["ok"]:
+            journal.erreur("Retrait de l'extension en échec : %s",
+                           resultat["message_technique"])
+            return {"ok": False, "message": langues.t("ext.retrait_echec")}
+        journal.info("Extension des locuteurs retirée, %.2f Go libérés", resultat["libere_go"])
+        return {
+            "ok": True,
+            "message": langues.t("ext.retiree",
+                                 taille=langues.nombre(resultat["libere_go"], 2)),
+            "extension": self.etat_locuteurs(),
+        }
 
     # -- import et export des données personnelles -------------------------
 

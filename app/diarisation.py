@@ -69,9 +69,11 @@ def indisponibilite() -> str:
         return ""
 
     if chemins.EST_GELE:
-        # La version installée ne contient pas PyTorch : il pèse à lui seul plus
-        # de 2,5 Go, ce qui ferait passer le programme d'installation de 200 Mo à
-        # près de 3 Go pour une fonction facultative.
+        # La version installée ne contient pas PyTorch : il pèse à lui seul
+        # plusieurs gigaoctets, ce qui ferait passer le programme d'installation
+        # de 200 Mo à bien davantage pour une fonction facultative. Depuis la
+        # version 2.3.0, l'application sait l'installer elle-même : voir
+        # app/extensions.py, et le bouton du panneau « Locuteurs ».
         return langues.t("diar.indispo.installee")
 
     if not torch_present():

@@ -19,6 +19,10 @@ gabarit-ia.txt
 logs/
 modeles/
 reprises/
+# Séparation des locuteurs installée depuis l'application, et son cache de
+# téléchargement. Plusieurs gigaoctets de bibliothèques, jamais versionnés.
+extensions/
+cache-pip/
 maj-etat.json
 surveillance-vus.json
 _ffmpeg/

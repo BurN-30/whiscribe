@@ -1,4 +1,4 @@
-; ===========================================================================
+﻿; ===========================================================================
 ;  WhiScribe, programme d'installation
 ;
 ;  Prend la sortie « onedir » de PyInstaller (dist\WhiScribe) et produit un
@@ -114,7 +114,7 @@ english.WebView2Echec=The WebView2 component could not be installed automaticall
 english.EspaceInsuffisant=Only about %1 GB is free on this drive.%n%nThe highest quality model needs 3.1 GB on its own. Do you want to keep this location anyway?
 english.DossierModelesRefuse=This folder could not be created, or is not writable.%n%nPlease choose another location.
 english.DesinstallerModeles=Also delete the transcription models?%n%nThey take up %1 in:%n%2%n%nAnswer No to keep them: a reinstall will find them again and will have nothing to download.
-english.DesinstallerDonnees=Also delete your personal {#NomApp} data?%n%nThis would permanently erase your glossary, your correction rules, your settings and the logs, in:%n%1%n%nAnswer No to keep them.
+english.DesinstallerDonnees=Also delete your personal {#NomApp} data?%n%nThis would permanently erase your glossary, your correction rules, your settings, the logs and the speaker separation components (%2), in:%n%1%n%nAnswer No to keep them.
 
 french.PageModelesTitre=Emplacement des modèles de transcription
 french.PageModelesDescription=Où faut-il ranger les fichiers de reconnaissance vocale ?
@@ -130,7 +130,7 @@ french.WebView2Echec=Le composant WebView2 n'a pas pu être installé automatiqu
 french.EspaceInsuffisant=Il ne reste qu'environ %1 Go de libre sur ce disque.%n%nLe modèle de qualité maximale en demande 3,1 à lui seul. Voulez-vous quand même garder cet emplacement ?
 french.DossierModelesRefuse=Ce dossier n'a pas pu être créé, ou n'est pas accessible en écriture.%n%nChoisissez un autre emplacement.
 french.DesinstallerModeles=Supprimer aussi les modèles de transcription ?%n%nIls occupent %1 dans :%n%2%n%nRépondez Non pour les conserver : une réinstallation les retrouvera et n'aura rien à retélécharger.
-french.DesinstallerDonnees=Supprimer aussi vos données personnelles de {#NomApp} ?%n%nCela effacerait définitivement votre glossaire, vos règles de correction, vos réglages et les journaux, dans :%n%1%n%nRépondez Non pour les conserver.
+french.DesinstallerDonnees=Supprimer aussi vos données personnelles de {#NomApp} ?%n%nCela effacerait définitivement votre glossaire, vos règles de correction, vos réglages, les journaux et les composants de séparation des locuteurs (%2), dans :%n%1%n%nRépondez Non pour les conserver.
 
 [Tasks]
 ; Décochée par défaut : on ne pose pas d'icône sur le bureau sans le demander.
@@ -174,6 +174,21 @@ end;
 function DossierModelesDefaut(): String;
 begin
   Result := DossierDonnees() + '\modeles';
+end;
+
+{ Séparation des locuteurs installée depuis l'application (app/extensions.py).
+  Elle pèse environ 2,5 Go et vit dans les données de l'utilisateur : elle entre
+  donc dans le périmètre de la question « supprimer vos données », et son poids
+  doit être annoncé, sans quoi la question porterait sur quelques kilooctets de
+  glossaire alors qu'elle efface plusieurs gigaoctets. }
+function DossierExtensions(): String;
+begin
+  Result := DossierDonnees() + '\extensions';
+end;
+
+function DossierCachePip(): String;
+begin
+  Result := DossierDonnees() + '\cache-pip';
 end;
 
 { Emplacement effectif au moment où l'on parle : celui que l'application utilise
@@ -424,6 +439,10 @@ begin
   { Sauvegardes automatiques posées avant chaque import de données. }
   DelTree(Base + '\whiscribe-donnees-avant-import-*.zip', False, True, False);
   DelTree(Base + '\logs', True, True, True);
+  { La séparation des locuteurs et son cache de téléchargement : 2,5 Go, annoncés
+    dans la question posée juste avant. }
+  DelTree(Base + '\extensions', True, True, True);
+  DelTree(Base + '\cache-pip', True, True, True);
   { Ne part que si les modèles n'y sont plus, donc jamais dans ce cas de figure. }
   RemoveDir(Base);
 end;
@@ -434,6 +453,7 @@ var
   Occupe: Int64;
   ModelesGardes: Boolean;
   ModelesDansLesDonnees: Boolean;
+  PoidsExtensions: Int64;
 begin
   if CurUninstallStep <> usPostUninstall then
     Exit;
@@ -463,7 +483,9 @@ begin
 
   if DirExists(DossierDonnees()) then
   begin
-    if MsgBox(FmtMessage(ExpandConstant('{cm:DesinstallerDonnees}'), [DossierDonnees()]),
+    PoidsExtensions := TailleDossier(DossierExtensions()) + TailleDossier(DossierCachePip());
+    if MsgBox(FmtMessage(ExpandConstant('{cm:DesinstallerDonnees}'), [
+                DossierDonnees(), TailleLisible(PoidsExtensions)]),
               mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
       SupprimerDonnees(ModelesGardes and ModelesDansLesDonnees);
   end;

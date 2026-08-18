@@ -41,6 +41,10 @@ PYTHON_MINIMUM = (3, 9)
 
 TORCH_VERSION = "torch==2.8.0"
 TORCHAUDIO_VERSION = "torchaudio==2.8.0"
+# Figée : pyannote.audio se contente de « torchcodec>=0.7.0 », et la dernière
+# version publiée est compilée contre un PyTorch bien plus récent. Elle se
+# charge alors sur « WinError 127, la procédure spécifiée est introuvable ».
+TORCHCODEC_VERSION = "torchcodec==0.7.0"
 INDEX_TORCH_CPU = "https://download.pytorch.org/whl/cpu"
 INDEX_TORCH_CUDA = "https://download.pytorch.org/whl/cu124"
 
@@ -227,16 +231,24 @@ def installer_locuteurs(nvidia: bool) -> bool:
     info(f"Installation de PyTorch depuis {index}")
     info("Environ 2,5 Go, comptez plusieurs minutes.")
     if not lancer(
-        pip("install", TORCH_VERSION, TORCHAUDIO_VERSION, "--index-url", index,
-            "--disable-pip-version-check"),
+        pip("install", TORCH_VERSION, TORCHAUDIO_VERSION, TORCHCODEC_VERSION,
+            "--index-url", index, "--disable-pip-version-check"),
         "installation de PyTorch",
     ):
         alerte("PyTorch n'a pas pu être installé, la séparation des locuteurs restera inactive.")
         return False
 
     info("Installation de pyannote.audio ...")
+    # Les versions de PyTorch sont répétées ici, et ce n'est pas une redite :
+    # pyannote.audio se contente de bornes basses, « torch>=2.8.0 » et
+    # « torchcodec>=0.7.0 ». Sans contrainte, pip repart sur PyPI chercher les
+    # dernières, qui embarquent CUDA, et écrase celles que l'on vient de poser.
+    # Deux « dist-info » de torch, un gigaoctet perdu, et un torchcodec compilé
+    # contre un autre PyTorch qui refuse ensuite de se charger.
     if not lancer(
         pip("install", "-r", str(RACINE / "requirements-locuteurs.txt"),
+            TORCH_VERSION, TORCHAUDIO_VERSION, TORCHCODEC_VERSION,
+            "--index-url", index, "--extra-index-url", "https://pypi.org/simple",
             "--disable-pip-version-check"),
         "installation de pyannote.audio",
     ):

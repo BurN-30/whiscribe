@@ -26,7 +26,7 @@ The setup asks **where to keep the transcription models**, 1.6 to 3.1 GB dependi
 
 The installer is not signed, so SmartScreen may warn on first run: "More info", then "Run anyway". See [Known limits](#known-limits).
 
-> Two features are not in the setup, on purpose: **speaker separation** needs PyTorch, about 2.5 GB, and lives in the [source install](docs/guide.md#run-from-source). Everything else is there.
+> **Speaker separation** does not ship inside the setup, on purpose: it needs PyTorch, about 3.6 GB once installed. It is added **from a button inside the application**, in the "Speakers" panel, which downloads and installs the components, announces the size and lets you cancel. Nothing else to do.
 
 ---
 
@@ -41,7 +41,7 @@ The installer is not signed, so SmartScreen may warn on first run: "More info", 
 - **Copy for AI.** One button puts your own instruction template, the metadata and the full text on the clipboard, ready to paste into the assistant of your choice. Nothing is sent by the app.
 - **Progressive saving.** Text is written segment by segment. A crash or a power cut does not lose the work: the app offers to resume at the next start.
 - **Watched folder,** off by default. A folder can be watched so that new recordings join the queue on their own, which suits a dictaphone or a meeting recorder that always drops files in the same place.
-- **Speaker separation,** optional, source install only. Produces a labelled transcript, `Speaker 1`, `Speaker 2`, which is worth a lot for a meeting summary.
+- **Speaker separation,** optional, installed from a button in the "Speakers" panel. Produces a labelled transcript, `Speaker 1`, `Speaker 2`, which is worth a lot for a meeting summary.
 - **Taskbar progress,** disk usage report, export and import of your data as a single zip file, dark and light theme, three keyboard shortcuts and no more: `Ctrl` + `O`, `Ctrl` + `Enter`, `Esc`.
 
 <!-- gif: drop two files, pick the Fast preset, start, progress bar filling, a finished line with its Read back button (about 15 s, no sound) -->
@@ -77,7 +77,7 @@ The Hugging Face token used for speaker separation is never included in an expor
 - **Designed for French first,** which is where it was tested most. Quality is equal or better in English and in the languages Whisper covers well, and the app tells you what to expect under the language selector: excellent, good, or variable.
 - **The first run needs an internet connection** to download the model, 1.6 to 3.1 GB depending on the preset. After that, never again.
 - **No AMD or Intel GPU acceleration.** Those machines transcribe on the processor.
-- **Speaker separation is not in the setup.** It needs the source install, about 2.5 GB of dependencies and a Hugging Face token. Without it, everything else works.
+- **Speaker separation installs separately**, about 0.8 GB to download and 3.6 GB on disk for the CPU build, more with an NVIDIA card. Keep 6 GB free while it installs. The button in the "Speakers" panel handles it, and a free Hugging Face token is still needed afterwards. Without it, everything else works.
 - **The installer is not signed.** SmartScreen may warn on first run. A code signing certificate costs several hundred euros a year, which makes no sense for a free personal tool.
 - **Audio is decoded entirely in memory,** about 230 MB per hour of recording. Comfortable up to several hours, but this is not stream processing.
 - **Speaker labels are useful, not authoritative.** Overlapping speech and distant voices are the hard cases. Setting the number of participants improves the split noticeably.
@@ -88,7 +88,7 @@ The Hugging Face token used for speaker separation is never included in an expor
 
 ## Run from source
 
-Two reasons only: change the code, or get **speaker separation** (PyTorch, not in the setup).
+One reason left: **change the code**. Speaker separation installs from a button in both modes, so the source route is now for developers only.
 
 ```bat
 git clone https://github.com/BurN-30/whiscribe

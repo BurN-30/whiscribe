@@ -26,7 +26,7 @@ L'assistant demande **où ranger les modèles de transcription**, de 1,6 à 3,1 
 
 Le programme d'installation n'est pas signé, SmartScreen peut donc avertir au premier lancement : « Informations complémentaires », puis « Exécuter quand même ». Voir les [limites connues](#limites-connues).
 
-> Une fonction n'est pas dans le programme d'installation, volontairement : la **séparation des locuteurs** repose sur PyTorch, environ 2,5 Go, et vit dans l'[installation depuis les sources](docs/guide.fr.md#installation-depuis-les-sources). Tout le reste est là.
+> La **séparation des locuteurs** n'est pas embarquée dans le programme d'installation, volontairement : elle repose sur PyTorch, environ 3,6 Go une fois posée. Elle s'ajoute **d'un bouton depuis l'application**, panneau « Locuteurs », qui télécharge et installe les composants, annonce la taille et laisse annuler. Rien d'autre à faire.
 
 ---
 
@@ -41,7 +41,7 @@ Le programme d'installation n'est pas signé, SmartScreen peut donc avertir au p
 - **Copier pour l'IA.** Un bouton met votre propre gabarit d'instructions, les métadonnées et le texte complet dans le presse-papiers, prêts à coller dans l'assistant de votre choix. L'application n'envoie rien.
 - **Sauvegarde progressive.** Le texte est écrit au fil des segments. Un plantage ou une coupure de courant ne fait plus perdre le travail : l'application propose de reprendre au lancement suivant.
 - **Dossier surveillé**, coupé par défaut. Un dossier peut être surveillé pour que les nouveaux enregistrements rejoignent la file tout seuls, ce qui va bien à un dictaphone ou à un enregistreur de réunion qui dépose toujours au même endroit.
-- **Séparation des locuteurs**, facultative, version source uniquement. Elle produit un texte étiqueté, `Locuteur 1`, `Locuteur 2`, ce qui vaut cher pour un compte rendu.
+- **Séparation des locuteurs**, facultative, installable d'un bouton depuis le panneau « Locuteurs ». Elle produit un texte étiqueté, `Locuteur 1`, `Locuteur 2`, ce qui vaut cher pour un compte rendu.
 - **Progression dans la barre des tâches**, état de l'espace occupé, export et import de vos données en un seul fichier zip, thème clair ou sombre, trois raccourcis clavier et pas un de plus : `Ctrl` + `O`, `Ctrl` + `Entrée`, `Échap`.
 
 <!-- gif : dépôt de deux fichiers, choix du preset Rapide, lancement, barre de progression qui se remplit, une ligne terminée avec son bouton de relecture (environ 15 s, sans son) -->
@@ -77,7 +77,7 @@ Le jeton Hugging Face utilisé par la séparation des locuteurs n'est jamais inc
 - **Conçue d'abord pour le français**, c'est là qu'elle a été le plus éprouvée. La qualité est égale ou meilleure en anglais et dans les langues bien couvertes par Whisper, et l'application annonce sous le sélecteur de langue ce qu'il faut attendre : excellente, bonne ou variable.
 - **Le premier lancement a besoin d'Internet** pour télécharger le modèle, de 1,6 à 3,1 Go selon le preset. Ensuite, plus jamais.
 - **Aucune accélération AMD ou Intel.** Ces machines transcrivent sur processeur.
-- **La séparation des locuteurs n'est pas dans le programme d'installation.** Elle demande la version source, environ 2,5 Go de dépendances et un jeton Hugging Face. Sans elle, tout le reste fonctionne.
+- **La séparation des locuteurs s'installe à part**, environ 0,8 Go à télécharger et 3,6 Go sur le disque en version processeur, davantage avec une carte NVIDIA. Comptez 6 Go de libre le temps de l'installation. Le bouton du panneau « Locuteurs » s'en charge, et un jeton Hugging Face gratuit reste à créer ensuite. Sans elle, tout le reste fonctionne.
 - **Le programme d'installation n'est pas signé.** SmartScreen peut avertir au premier lancement. Une signature de code coûte plusieurs centaines d'euros par an, ce qui n'a pas de sens pour un outil personnel et gratuit.
 - **L'audio est décodé entièrement en mémoire**, environ 230 Mo par heure d'enregistrement. Confortable jusqu'à plusieurs heures, mais ce n'est pas du traitement en flux.
 - **Les étiquettes de locuteurs sont utiles, elles ne sont pas une vérité.** Les chevauchements et les voix lointaines sont les cas durs. Préciser le nombre de participants améliore nettement le découpage.
@@ -88,7 +88,7 @@ Le jeton Hugging Face utilisé par la séparation des locuteurs n'est jamais inc
 
 ## Installation depuis les sources
 
-Deux raisons seulement : modifier le code, ou obtenir la **séparation des locuteurs** (PyTorch, hors du setup).
+Une seule raison désormais : **modifier le code**. La séparation des locuteurs s'installe d'un bouton dans les deux modes, la voie source ne sert plus qu'aux développeurs.
 
 ```bat
 git clone https://github.com/BurN-30/whiscribe

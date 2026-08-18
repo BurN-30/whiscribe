@@ -15,7 +15,8 @@ const etat = {
   presets: [],
   fichiers: new Map(),   // identifiant -> donnees de la ligne
   historique: [],
-  diarisation: { disponible: false, jeton_present: false, guide: {} },
+  diarisation: { disponible: false, jeton_present: false, guide: {}, extension: {} },
+  extensionEnCours: false,   // installation de la separation des locuteurs en cours
   modeles: { dossier: '', presets: [] },
   versionInstallee: false,
   enCours: false,
@@ -292,30 +293,172 @@ function majCorrections(donnees) {
   }
 }
 
+/* Panneau « Locuteurs » : trois etats successifs, un seul visible a la fois.
+
+   1. les composants ne sont pas la, un bouton les installe ;
+   2. l'installation tourne, progression et annulation ;
+   3. les composants sont la, on retrouve la bascule, le jeton, et le retrait.
+
+   Le jeton Hugging Face reste une etape distincte, posee apres : ce sont deux
+   choses differentes, un telechargement de plusieurs Go et un compte gratuit. */
+
 function majDiarisation() {
   const d = etat.diarisation;
+  const ext = d.extension || {};
+  const enCours = !!etat.extensionEnCours;
+  const posee = !!ext.installee && !!d.disponible;
+
+  $('#ext-absente').style.display = (!posee && !enCours) ? 'block' : 'none';
+  $('#ext-en-cours').style.display = enCours ? 'block' : 'none';
+  $('#ext-installee').style.display = posee ? 'block' : 'none';
+
+  if (!posee) {
+    // Chiffres annonces avant tout clic : ce qui transite, ce qu'il faut de
+    // place, et ce qui reste. On ne telecharge jamais en aveugle.
+    $('#ext-chiffres').textContent = chiffresExtension(ext);
+    // Dossier present mais composants qui ne se chargent pas : telechargement
+    // interrompu, ou fichiers abimes. On le dit, plutot que de proposer une
+    // installation sans expliquer pourquoi elle revient.
+    if (ext.installee && !enCours && d.indisponibilite) {
+      $('#ext-retour').innerHTML = encartAttention(d.indisponibilite);
+    }
+    return;
+  }
+
   const el = $('#etat-diarisation');
   const bascule = $('#opt-diarisation');
-
-  if (!d.disponible) {
-    // Dans la version installee, PyTorch n'est pas embarque : on l'explique
-    // plutot que de laisser croire a une installation ratee.
-    el.textContent = etat.versionInstallee
-      ? t('ui.loc.non_incluse')
-      : t('ui.loc.composants_absents');
-    bascule.checked = false;
-    bascule.disabled = true;
-    $('#libelle-jeton').textContent = t('ui.loc.en_savoir_plus');
-  } else if (!d.jeton_present) {
+  bascule.disabled = false;
+  if (!d.jeton_present) {
     el.textContent = t('ui.loc.jeton_a_saisir');
-    bascule.disabled = false;
     $('#libelle-jeton').textContent = t('ui.loc.configurer');
   } else {
     el.textContent = bascule.checked ? t('ui.loc.active') : t('ui.loc.disponible');
-    bascule.disabled = false;
     $('#libelle-jeton').textContent = t('ui.loc.modifier_jeton');
   }
   $('#bloc-locuteurs').style.display = bascule.checked ? 'block' : 'none';
+
+  // Le retrait n'a de sens que pour la version installee : depuis les sources,
+  // les paquets vivent dans le « .venv », qui ne nous appartient pas.
+  const retirable = !!ext.mode_installe;
+  $('#btn-retirer-locuteurs').style.display = retirable ? '' : 'none';
+  $('#libelle-retirer-locuteurs').textContent = t('ui.ext.retirer', {
+    taille: nombreLocal(ext.taille_go || 0, 1),
+  });
+  $('#ext-note-installee').textContent = retirable
+    ? t('ui.ext.note_installee', { variante: t('ui.ext.variante_' + (ext.variante || 'cpu')) })
+    : t('ui.ext.note_sources');
+}
+
+/* Ce que couterait l'installation, dit une seule fois et de la meme facon
+   partout : sur le bouton et dans la modale de confirmation. */
+function chiffresExtension(ext) {
+  return t('ui.ext.chiffres', {
+    telechargement: nombreLocal(ext.telechargement_go || 0.8, 1),
+    installee: nombreLocal(ext.taille_attendue_go || 3.6, 1),
+    requis: nombreLocal(ext.espace_requis_go || 6, 0),
+    libre: nombreLocal(ext.espace_libre_go || 0, 0),
+  });
+}
+
+/* Nombre decimal au separateur de la langue d'interface, comme le fait Python. */
+function nombreLocal(valeur, decimales) {
+  return Number(valeur || 0).toFixed(decimales).replace('.', t('format.decimal'));
+}
+
+/* Le jeton est demande a part, et seulement une fois les composants poses :
+   c'est une etape distincte, pas la suite mecanique du telechargement. */
+function ouvrirModaleJeton() {
+  const d = etat.diarisation;
+  $('#etat-diarisation-modale').innerHTML = d.disponible ? '' :
+    encartAttention(d.indisponibilite);
+  $('#etapes-jeton').innerHTML = (d.guide.etapes || []).map((e) => `<li>${ech(e)}</li>`).join('');
+  $('#retour-jeton').innerHTML = '';
+  $('#champ-jeton').value = '';
+  ouvrirModale('#modale-jeton');
+}
+
+/* ------------------------------------ Installation de la separation des locuteurs */
+
+function ouvrirModaleExtension() {
+  const ext = (etat.diarisation || {}).extension || {};
+  $('#ext-modale-chiffres').textContent = chiffresExtension(ext);
+  const assez = (ext.espace_libre_go || 0) >= (ext.espace_requis_go || 6);
+  $('#ext-modale-alerte').innerHTML = assez ? '' : encartAttention(t('ui.ext.place_manquante'));
+  $('#btn-confirmer-extension').disabled = !assez;
+  ouvrirModale('#modale-extension');
+}
+
+async function lancerInstallationLocuteurs() {
+  fermerModale($('#modale-extension'));
+  $('#ext-retour').innerHTML = '';
+  $('#ext-message').textContent = t('ui.ext.demarrage');
+  $('#ext-detail').textContent = '';
+  $('#ext-barre').style.width = '0%';
+  etat.extensionEnCours = true;
+  majDiarisation();
+
+  const r = await pywebview.api.installer_locuteurs();
+  if (!r || !r.ok) {
+    etat.extensionEnCours = false;
+    majDiarisation();
+    $('#ext-retour').innerHTML = encartAttention((r && r.message) || t('ui.ext.echec_lancement'));
+  }
+}
+
+/* Appelee par Python a chaque etape du processus de fond.
+
+   Deux lignes, deux roles : la grande etape en cours ne bouge presque pas,
+   le detail defile. Une seule ligne qui change a chaque paquet serait
+   illisible, et ferait perdre de vue ou l'on en est. */
+function onExtensionLocuteurs(evenement) {
+  if (!etat.extensionEnCours) return;
+  switch (evenement.phase) {
+    case 'debut':
+    case 'lot':
+      $('#ext-message').textContent = evenement.message || '';
+      break;
+    case 'paquet':
+      $('#ext-detail').textContent = evenement.message || '';
+      break;
+    case 'octets':
+      $('#ext-barre').style.width = Math.max(0, Math.min(100, evenement.pct || 0)) + '%';
+      $('#ext-detail').textContent = evenement.message || '';
+      break;
+    case 'pose':
+      $('#ext-barre').style.width = '100%';
+      $('#ext-message').textContent = evenement.message || '';
+      $('#ext-detail').textContent = '';
+      break;
+    case 'detail':
+      // Ligne d'erreur de pip : elle part au journal, elle n'a rien a faire
+      // dans un panneau de reglages.
+      if (evenement.message) journaliser('attention', evenement.message);
+      break;
+    default:
+      break;
+  }
+}
+
+/* Appelee par Python quand le processus de fond se termine, quelle qu'en soit
+   l'issue : reussite, echec, ou annulation demandee par l'utilisateur. */
+function onFinExtensionLocuteurs(bilan) {
+  etat.extensionEnCours = false;
+  if (bilan.extension) etat.diarisation.extension = bilan.extension;
+  if (bilan.etat === 'installee') {
+    etat.diarisation.disponible = !!bilan.chaud;
+    etat.diarisation.indisponibilite = bilan.chaud ? '' : bilan.message;
+    $('#ext-retour').innerHTML = encartSucces(bilan.message);
+    journaliser('ok', bilan.message);
+    majDiarisation();
+    // Le jeton est l'etape suivante, et elle n'a rien a voir avec les paquets :
+    // on l'enchaine seulement quand les composants repondent deja.
+    if (bilan.chaud && !etat.diarisation.jeton_present) ouvrirModaleJeton();
+    return;
+  }
+  $('#ext-retour').innerHTML = bilan.etat === 'annulee'
+    ? encartInfo(bilan.message) : encartAttention(bilan.message);
+  journaliser(bilan.etat === 'annulee' ? 'info' : 'erreur', bilan.message);
+  majDiarisation();
 }
 
 /* ------------------------------------------------------ Dossier des modeles */
@@ -1422,7 +1565,7 @@ document.addEventListener('DOMContentLoaded', () => {
     enregistrer({ diarisation: e.target.checked });
     majDiarisation();
     rafraichirEstimations();
-    if (e.target.checked && !etat.diarisation.jeton_present) ouvrirModale('#modale-jeton');
+    if (e.target.checked && !etat.diarisation.jeton_present) ouvrirModaleJeton();
   });
   $('#nb-locuteurs').addEventListener('change', (e) =>
     enregistrer({ nb_locuteurs: parseInt(e.target.value, 10) || 0 }));
@@ -1576,27 +1719,30 @@ document.addEventListener('DOMContentLoaded', () => {
     son.play().catch(() => { /* pas de lecture possible, sans consequence */ });
   });
 
-  // Jeton Hugging Face
-  $('#btn-jeton').addEventListener('click', () => {
-    const d = etat.diarisation;
-    $('#etat-diarisation-modale').innerHTML = d.disponible ? '' :
-      encartAttention(d.indisponibilite);
-
-    // Version installee sans PyTorch : le jeton ne servirait a rien, on masque
-    // toute la procedure et on renvoie vers la version source.
-    const inutile = !d.disponible && etat.versionInstallee;
-    $('#bloc-procedure-jeton').style.display = inutile ? 'none' : 'block';
-    $('#bloc-source-locuteurs').style.display = inutile ? 'block' : 'none';
-    $('#btn-effacer-jeton').style.display = inutile ? 'none' : '';
-    $('#btn-enregistrer-jeton').style.display = inutile ? 'none' : '';
-
-    $('#etapes-jeton').innerHTML = (d.guide.etapes || []).map((e) => `<li>${ech(e)}</li>`).join('');
-    $('#retour-jeton').innerHTML = '';
-    $('#champ-jeton').value = '';
-    ouvrirModale('#modale-jeton');
+  // Installation de la separation des locuteurs
+  $('#btn-installer-locuteurs').addEventListener('click', ouvrirModaleExtension);
+  $('#btn-confirmer-extension').addEventListener('click', lancerInstallationLocuteurs);
+  $('#btn-annuler-locuteurs').addEventListener('click', async () => {
+    $('#btn-annuler-locuteurs').disabled = true;
+    await pywebview.api.annuler_installation_locuteurs();
+    $('#btn-annuler-locuteurs').disabled = false;
   });
-  $('#btn-lien-projet').addEventListener('click', () =>
-    pywebview.api.ouvrir_lien(etat.diarisation.guide.url_projet));
+  $('#btn-retirer-locuteurs').addEventListener('click', async () => {
+    const r = await pywebview.api.retirer_locuteurs();
+    if (r.extension) etat.diarisation.extension = r.extension;
+    if (r.ok) {
+      etat.diarisation.disponible = false;
+      etat.diarisation.indisponibilite = '';
+      $('#opt-diarisation').checked = false;
+      enregistrer({ diarisation: false });
+    }
+    $('#ext-retour').innerHTML = r.ok ? encartInfo(r.message) : encartAttention(r.message);
+    journaliser(r.ok ? 'info' : 'erreur', r.message);
+    majDiarisation();
+  });
+
+  // Jeton Hugging Face
+  $('#btn-jeton').addEventListener('click', ouvrirModaleJeton);
   $('#btn-lien-conditions').addEventListener('click', () =>
     pywebview.api.ouvrir_lien(etat.diarisation.guide.url_conditions));
   $('#btn-lien-jeton').addEventListener('click', () =>

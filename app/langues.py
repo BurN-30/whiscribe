@@ -233,20 +233,21 @@ _FR: dict[str, str] = {
 
     # -- séparation des locuteurs (app/diarisation.py) ---------------------
     "diar.locuteur": "Locuteur {n}",
+    # Depuis la version 2.3.0, ces trois phrases ne renvoient plus à une
+    # procédure : le bouton « Installer la séparation des locuteurs » du panneau
+    # « Locuteurs » fait le travail, dans les deux modes.
     "diar.indispo.installee": (
-        "La séparation des locuteurs n'est pas incluse dans la version installée. Elle "
-        "repose sur PyTorch, environ 2,5 Go de composants supplémentaires. Elle reste "
-        "disponible dans la version source du projet, voir la section « Séparation des "
-        "locuteurs » du fichier README. Tout le reste de l'application fonctionne "
-        "normalement."
+        "La séparation des locuteurs n'est pas encore installée. Elle repose sur PyTorch, "
+        "environ 3,6 Go de composants à poser une seule fois. Le bouton "
+        "« Installer la séparation des locuteurs » du panneau « Locuteurs » s'en charge."
     ),
     "diar.indispo.torch": (
-        "PyTorch n'est pas installé. Relancez « installer.bat » et répondez oui à la "
-        "question sur la séparation des locuteurs, ou lancez « installer.bat --locuteurs »."
+        "PyTorch n'est pas installé. Le bouton « Installer la séparation des locuteurs » "
+        "du panneau « Locuteurs » le pose pour vous."
     ),
     "diar.indispo.pyannote": (
-        "La bibliothèque pyannote.audio n'est pas installée. Relancez "
-        "« installer.bat --locuteurs »."
+        "La bibliothèque pyannote.audio n'est pas installée. Le bouton « Installer la "
+        "séparation des locuteurs » du panneau « Locuteurs » la pose pour vous."
     ),
     "diar.inaccessible.titre": "Modèle de locuteurs inaccessible",
     "diar.inaccessible.depot": (
@@ -271,6 +272,43 @@ _FR: dict[str, str] = {
         "Collez le jeton dans le champ ci-dessous. Il est enregistré dans le fichier "
         "« jeton_hf.txt » de vos données personnelles, et n'est jamais versionné."
     ),
+
+    # -- installation de l'extension « locuteurs » (app/extensions.py) -----
+    "ext.deja_en_cours": "Une installation est déjà en cours.",
+    "ext.espace_insuffisant": (
+        "Il ne reste que {libre} Go de libre sur ce disque, et il en faut environ {requis}. "
+        "Faites de la place, puis relancez l'installation."
+    ),
+    "ext.lancement_impossible": (
+        "L'installation n'a pas pu démarrer. Le journal de bord en dit davantage."
+    ),
+    "ext.lot.locuteurs": "PyTorch et pyannote.audio",
+    "ext.lot.paquets": "composants",
+    "ext.etape.preparation": "Préparation de l'installation...",
+    "ext.etape.installation": "Installation de {nom}...",
+    "ext.etape.lot": "Étape {numero} sur {total} : {nom}",
+    "ext.etape.paquet": "Récupération de {paquet}...",
+    "ext.etape.telechargement": "Téléchargement de {paquet} : {recu} sur {total}",
+    "ext.etape.pose": "Mise en place des composants...",
+    "ext.etape.echec_lot": "Une étape a échoué.",
+    "ext.annulee": "Installation annulée. Ce qui a été téléchargé est conservé pour une reprise.",
+    "ext.echec": (
+        "L'installation n'a pas abouti. Vérifiez la connexion Internet et la place "
+        "disponible, puis relancez : le téléchargement reprend où il s'était arrêté."
+    ),
+    "ext.verification_ko": (
+        "Les composants ont été posés mais ne se chargent pas. Retirez la séparation "
+        "des locuteurs, puis réinstallez-la."
+    ),
+    "ext.installee": "Séparation des locuteurs installée. Elle est active immédiatement.",
+    "ext.installee_redemarrer": (
+        "Séparation des locuteurs installée. Redémarrez l'application pour l'activer."
+    ),
+    "ext.retrait_echec": (
+        "Le retrait n'a pas pu se faire entièrement. Fermez l'application, puis "
+        "recommencez."
+    ),
+    "ext.retiree": "Séparation des locuteurs retirée, {taille} Go libérés.",
 
     # -- glossaire et corrections (app/vocabulaire.py) ---------------------
     "voc.glossaire_vide": "Glossaire vide : aucune amorce envoyée au modèle.",
@@ -903,18 +941,17 @@ _EN: dict[str, str] = {
 
     "diar.locuteur": "Speaker {n}",
     "diar.indispo.installee": (
-        "Speaker separation is not included in the installed version. It relies on "
-        "PyTorch, about 2.5 GB of extra components. It remains available in the source "
-        "version of the project, see the \"Speaker separation\" section of the README. "
-        "Everything else works normally."
+        "Speaker separation is not installed yet. It relies on PyTorch, about 3.6 GB of "
+        "components to install once. The \"Install speaker separation\" button in the "
+        "\"Speakers\" panel takes care of it."
     ),
     "diar.indispo.torch": (
-        "PyTorch is not installed. Run \"installer.bat\" again and answer yes to the "
-        "speaker separation question, or run \"installer.bat --locuteurs\"."
+        "PyTorch is not installed. The \"Install speaker separation\" button in the "
+        "\"Speakers\" panel puts it in place for you."
     ),
     "diar.indispo.pyannote": (
-        "The pyannote.audio library is not installed. Run \"installer.bat --locuteurs\" "
-        "again."
+        "The pyannote.audio library is not installed. The \"Install speaker separation\" "
+        "button in the \"Speakers\" panel puts it in place for you."
     ),
     "diar.inaccessible.titre": "Speaker model unreachable",
     "diar.inaccessible.depot": (
@@ -939,6 +976,41 @@ _EN: dict[str, str] = {
         "Paste the token in the field below. It is saved in the \"jeton_hf.txt\" file of "
         "your personal data, and is never committed to version control."
     ),
+
+    "ext.deja_en_cours": "An installation is already running.",
+    "ext.espace_insuffisant": (
+        "Only {libre} GB are free on this drive, and about {requis} are needed. Free up "
+        "some space, then start the installation again."
+    ),
+    "ext.lancement_impossible": (
+        "The installation could not start. The log file has more to say."
+    ),
+    "ext.lot.locuteurs": "PyTorch and pyannote.audio",
+    "ext.lot.paquets": "components",
+    "ext.etape.preparation": "Preparing the installation...",
+    "ext.etape.installation": "Installing {nom}...",
+    "ext.etape.lot": "Step {numero} of {total}: {nom}",
+    "ext.etape.paquet": "Fetching {paquet}...",
+    "ext.etape.telechargement": "Downloading {paquet}: {recu} of {total}",
+    "ext.etape.pose": "Putting the components in place...",
+    "ext.etape.echec_lot": "A step failed.",
+    "ext.annulee": "Installation cancelled. What was downloaded is kept, so it can resume.",
+    "ext.echec": (
+        "The installation did not complete. Check your Internet connection and the free "
+        "space, then start again: the download picks up where it stopped."
+    ),
+    "ext.verification_ko": (
+        "The components were installed but do not load. Remove speaker separation, then "
+        "install it again."
+    ),
+    "ext.installee": "Speaker separation installed. It is active right away.",
+    "ext.installee_redemarrer": (
+        "Speaker separation installed. Restart the application to activate it."
+    ),
+    "ext.retrait_echec": (
+        "The removal could not complete. Close the application, then try again."
+    ),
+    "ext.retiree": "Speaker separation removed, {taille} GB freed.",
 
     "voc.glossaire_vide": "Glossary empty: no prompt is sent to the model.",
     "voc.premier_trop_long": "The first term already exceeds the prompt limit.",

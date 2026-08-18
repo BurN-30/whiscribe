@@ -301,31 +301,66 @@
 
     <div class="bloc-reglage">
       <span class="titre-section" data-i18n="ui.section.locuteurs"></span>
-      <label class="bascule">
-        <input type="checkbox" id="opt-diarisation">
-        <span class="piste"></span>
-        <span>
-          <span class="libelle" data-i18n="ui.loc.bascule"></span><br>
-          <span class="sous-libelle" id="etat-diarisation">--</span>
-        </span>
-      </label>
-      <div id="bloc-locuteurs" style="display:none;margin-top:10px">
-        <div class="champ">
-          <label for="nb-locuteurs" data-i18n="ui.loc.nombre"></label>
-          <select id="nb-locuteurs">
-            <option value="0" data-i18n="ui.loc.auto"></option>
-            <option value="2">2</option><option value="3">3</option>
-            <option value="4">4</option><option value="5">5</option>
-            <option value="6">6</option><option value="7">7</option>
-            <option value="8">8</option><option value="10">10</option>
-          </select>
-          <span class="aide" data-i18n="ui.aide.locuteurs"></span>
-        </div>
+
+      <!-- Premiere etape : poser les composants. Un seul bouton, qui fait tout,
+           dans les deux modes. Le panneau enchaine ensuite sur le jeton. -->
+      <div id="ext-absente" class="etape-extension" style="display:none">
+        <div class="sous-libelle" data-i18n="ui.ext.absente"></div>
+        <div class="sous-libelle ext-chiffres" id="ext-chiffres">--</div>
+        <button class="bouton bouton-accent" id="btn-installer-locuteurs" style="width:100%;margin-top:8px">
+          <svg class="icone-s icone"><use href="#i-import"></use></svg>
+          <span data-i18n="ui.ext.installer"></span>
+        </button>
+        <span class="aide" data-i18n="ui.ext.aide"></span>
       </div>
-      <button class="bouton" id="btn-jeton" style="width:100%;margin-top:8px">
-        <svg class="icone-s icone"><use href="#i-personnes"></use></svg>
-        <span id="libelle-jeton"></span>
-      </button>
+
+      <!-- Pendant le telechargement. L'application reste utilisable. -->
+      <div id="ext-en-cours" class="etape-extension" style="display:none">
+        <div class="sous-libelle" id="ext-message">--</div>
+        <div class="barre"><span id="ext-barre" style="width:0%"></span></div>
+        <div class="sous-libelle ext-chiffres" id="ext-detail">--</div>
+        <button class="bouton" id="btn-annuler-locuteurs" style="width:100%;margin-top:8px">
+          <svg class="icone-s icone"><use href="#i-croix"></use></svg>
+          <span data-i18n="ui.ext.annuler"></span>
+        </button>
+        <span class="aide" data-i18n="ui.ext.aide_en_cours"></span>
+      </div>
+
+      <!-- Composants en place : les reglages habituels reprennent la main. -->
+      <div id="ext-installee" class="etape-extension" style="display:none">
+        <label class="bascule">
+          <input type="checkbox" id="opt-diarisation">
+          <span class="piste"></span>
+          <span>
+            <span class="libelle" data-i18n="ui.loc.bascule"></span><br>
+            <span class="sous-libelle" id="etat-diarisation">--</span>
+          </span>
+        </label>
+        <div id="bloc-locuteurs" style="display:none;margin-top:10px">
+          <div class="champ">
+            <label for="nb-locuteurs" data-i18n="ui.loc.nombre"></label>
+            <select id="nb-locuteurs">
+              <option value="0" data-i18n="ui.loc.auto"></option>
+              <option value="2">2</option><option value="3">3</option>
+              <option value="4">4</option><option value="5">5</option>
+              <option value="6">6</option><option value="7">7</option>
+              <option value="8">8</option><option value="10">10</option>
+            </select>
+            <span class="aide" data-i18n="ui.aide.locuteurs"></span>
+          </div>
+        </div>
+        <button class="bouton" id="btn-jeton" style="width:100%;margin-top:8px">
+          <svg class="icone-s icone"><use href="#i-personnes"></use></svg>
+          <span id="libelle-jeton"></span>
+        </button>
+        <button class="bouton bouton-discret" id="btn-retirer-locuteurs" style="width:100%;margin-top:8px;display:none">
+          <svg class="icone-s icone"><use href="#i-corbeille"></use></svg>
+          <span id="libelle-retirer-locuteurs"></span>
+        </button>
+        <span class="aide" id="ext-note-installee"></span>
+      </div>
+
+      <div id="ext-retour" style="margin-top:8px"></div>
     </div>
 
     <div class="bloc-reglage">
@@ -529,6 +564,30 @@
   </div>
 </div>
 
+<div class="voile" id="modale-extension">
+  <div class="modale">
+    <div class="modale-entete">
+      <svg class="icone"><use href="#i-import"></use></svg>
+      <h2 data-i18n="ui.ext.modale.titre"></h2>
+      <button class="bouton-icone" data-fermer><svg class="icone"><use href="#i-croix"></use></svg></button>
+    </div>
+    <div class="modale-corps">
+      <p data-i18n="ui.ext.modale.intro"></p>
+      <div class="encart encart-info">
+        <svg class="icone-s icone"><use href="#i-info"></use></svg>
+        <span id="ext-modale-chiffres"></span>
+      </div>
+      <p data-i18n="ui.ext.modale.duree"></p>
+      <div id="ext-modale-alerte"></div>
+    </div>
+    <div class="modale-pied">
+      <span class="pousse"></span>
+      <button class="bouton" data-fermer data-i18n="ui.bouton.annuler"></button>
+      <button class="bouton bouton-accent" id="btn-confirmer-extension" data-i18n="ui.ext.modale.lancer"></button>
+    </div>
+  </div>
+</div>
+
 <div class="voile" id="modale-jeton">
   <div class="modale">
     <div class="modale-entete">
@@ -538,21 +597,6 @@
     </div>
     <div class="modale-corps">
       <div id="etat-diarisation-modale"></div>
-
-      <div id="bloc-source-locuteurs" style="display:none">
-        <p data-i18n="ui.modale.jeton.source1"></p>
-        <p data-i18n="ui.modale.jeton.source2"></p>
-        <div style="display:flex;gap:8px;margin-bottom:14px">
-          <button class="bouton" id="btn-lien-projet">
-            <svg class="icone-s icone"><use href="#i-externe"></use></svg>
-            <span data-i18n="ui.modale.jeton.procedure"></span>
-          </button>
-        </div>
-        <div class="encart encart-info">
-          <svg class="icone-s icone"><use href="#i-info"></use></svg>
-          <span data-i18n="ui.modale.jeton.reste_ok"></span>
-        </div>
-      </div>
 
       <div id="bloc-procedure-jeton">
         <p data-i18n="ui.modale.jeton.intro"></p>

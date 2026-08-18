@@ -17,8 +17,8 @@ pip install -r requirements.txt
 .venv\Scripts\pythonw transcriber.pyw
 ```
 
-Python 3.9 or newer, Windows 64-bit. Speaker separation needs the extra install described
-in the [README](README.md#run-from-source). Nothing else, no build step for the interface:
+Python 3.9 or newer, Windows 64-bit. Speaker separation is installed from the button in the
+"Speakers" panel of the app, in both modes, or with `installer.bat --locuteurs`. Nothing else, no build step for the interface:
 `web/` is plain HTML, CSS and JavaScript, served to the WebView as is.
 
 ## Before opening a pull request

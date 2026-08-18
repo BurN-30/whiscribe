@@ -202,14 +202,39 @@ fr: {
   'ui.loc.nombre': 'Nombre de participants',
   'ui.loc.auto': 'Détection automatique',
   'ui.aide.locuteurs': 'Préciser le nombre exact améliore nettement le découpage.',
-  'ui.loc.non_incluse': 'Non incluse dans la version installée',
-  'ui.loc.composants_absents': 'Composants non installés',
-  'ui.loc.en_savoir_plus': 'En savoir plus',
   'ui.loc.jeton_a_saisir': 'Jeton Hugging Face à renseigner',
   'ui.loc.configurer': "Configurer l'accès",
   'ui.loc.modifier_jeton': 'Modifier le jeton',
   'ui.loc.active': 'Active',
   'ui.loc.disponible': 'Disponible',
+
+  /* -- réglages : installation de la séparation des locuteurs ------------ */
+  'ui.ext.absente': 'Composants non installés',
+  'ui.ext.chiffres': '{telechargement} Go à télécharger, {installee} Go une fois installée. '
+    + 'Il faut {requis} Go de libre sur ce disque, il en reste {libre}.',
+  'ui.ext.installer': 'Installer la séparation des locuteurs',
+  'ui.ext.aide': "Un seul téléchargement, une seule fois. Vous pouvez continuer à transcrire "
+    + 'pendant ce temps.',
+  'ui.ext.annuler': "Annuler l'installation",
+  'ui.ext.aide_en_cours': "Le téléchargement se poursuit en arrière-plan. L'application reste "
+    + 'utilisable, et une annulation ne perd rien de ce qui est déjà reçu.',
+  'ui.ext.demarrage': 'Démarrage...',
+  'ui.ext.retirer': 'Retirer la séparation des locuteurs ({taille} Go)',
+  'ui.ext.note_installee': 'Composants installés dans vos données personnelles, variante '
+    + '{variante}.',
+  'ui.ext.note_sources': "Composants installés dans l'environnement « .venv » du projet.",
+  'ui.ext.variante_cpu': 'processeur',
+  'ui.ext.variante_cuda': 'carte NVIDIA',
+  'ui.ext.place_manquante': "Il n'y a pas assez de place sur ce disque. Faites de l'espace, "
+    + 'puis revenez ici.',
+  'ui.ext.echec_lancement': "L'installation n'a pas pu démarrer.",
+  'ui.ext.modale.titre': 'Installer la séparation des locuteurs',
+  'ui.ext.modale.intro': "Cette fonction reconnaît les voix et étiquette chaque passage "
+    + "« Locuteur 1 », « Locuteur 2 ». Elle repose sur PyTorch, qui n'est pas livré avec "
+    + "l'application parce qu'il pèse à lui seul plus que tout le reste.",
+  'ui.ext.modale.duree': 'Comptez plusieurs minutes selon votre connexion. Le téléchargement se '
+    + "fait en arrière-plan : l'application reste utilisable, et il reprend là où il s'arrête.",
+  'ui.ext.modale.lancer': 'Installer',
 
   /* -- réglages : modèles ----------------------------------------------- */
   'ui.section.modeles': 'Modèles',
@@ -305,16 +330,6 @@ fr: {
 
   /* -- modale locuteurs -------------------------------------------------- */
   'ui.modale.jeton.titre': 'Séparation des locuteurs',
-  'ui.modale.jeton.source1': 'Cette fonction repose sur PyTorch, environ 2,5 Go de composants '
-    + "supplémentaires. Les embarquer ferait passer le programme d'installation de quelques "
-    + 'centaines de mégaoctets à près de trois gigaoctets, pour une option que tout le monde '
-    + "n'utilise pas.",
-  'ui.modale.jeton.source2': "Elle reste disponible dans la version source du projet : "
-    + "l'installateur pose PyTorch et pyannote sur demande. La marche à suivre est décrite "
-    + 'dans le fichier README, section « Séparation des locuteurs ».',
-  'ui.modale.jeton.procedure': 'Voir la procédure',
-  'ui.modale.jeton.reste_ok': "Tout le reste de l'application fonctionne normalement, "
-    + 'simplement sans étiquettes de locuteur.',
   'ui.modale.jeton.intro': 'Le modèle qui reconnaît les voix est mis à disposition '
     + "gratuitement, mais son auteur demande d'accepter ses conditions et de s'identifier par "
     + 'un jeton. Trois étapes, une seule fois.',
@@ -658,14 +673,36 @@ en: {
   'ui.loc.nombre': 'Number of participants',
   'ui.loc.auto': 'Detect automatically',
   'ui.aide.locuteurs': 'Giving the exact number improves the split noticeably.',
-  'ui.loc.non_incluse': 'Not included in the installed version',
-  'ui.loc.composants_absents': 'Components not installed',
-  'ui.loc.en_savoir_plus': 'Learn more',
   'ui.loc.jeton_a_saisir': 'Hugging Face token needed',
   'ui.loc.configurer': 'Set up access',
   'ui.loc.modifier_jeton': 'Change the token',
   'ui.loc.active': 'On',
   'ui.loc.disponible': 'Available',
+
+  'ui.ext.absente': 'Components not installed',
+  'ui.ext.chiffres': '{telechargement} GB to download, {installee} GB once installed. '
+    + '{requis} GB must be free on this drive, {libre} GB are left.',
+  'ui.ext.installer': 'Install speaker separation',
+  'ui.ext.aide': 'One download, once. You can carry on transcribing while it runs.',
+  'ui.ext.annuler': 'Cancel the installation',
+  'ui.ext.aide_en_cours': 'The download carries on in the background. The application stays '
+    + 'usable, and cancelling loses nothing of what has already arrived.',
+  'ui.ext.demarrage': 'Starting...',
+  'ui.ext.retirer': 'Remove speaker separation ({taille} GB)',
+  'ui.ext.note_installee': 'Components installed in your personal data, {variante} build.',
+  'ui.ext.note_sources': 'Components installed in the project ".venv" environment.',
+  'ui.ext.variante_cpu': 'CPU',
+  'ui.ext.variante_cuda': 'NVIDIA',
+  'ui.ext.place_manquante': 'There is not enough room on this drive. Free up some space, then '
+    + 'come back here.',
+  'ui.ext.echec_lancement': 'The installation could not start.',
+  'ui.ext.modale.titre': 'Install speaker separation',
+  'ui.ext.modale.intro': 'This feature recognises voices and labels each passage "Speaker 1", '
+    + '"Speaker 2". It relies on PyTorch, which does not ship with the application because it '
+    + 'weighs more on its own than everything else put together.',
+  'ui.ext.modale.duree': 'Expect several minutes depending on your connection. The download '
+    + 'runs in the background: the application stays usable, and it picks up where it stops.',
+  'ui.ext.modale.lancer': 'Install',
 
   'ui.section.modeles': 'Models',
   'ui.bouton.changer': 'Change',
@@ -750,14 +787,6 @@ en: {
     + 'touch "digital". Corrections are applied to the final text, after transcription.',
 
   'ui.modale.jeton.titre': 'Speaker separation',
-  'ui.modale.jeton.source1': 'This feature relies on PyTorch, about 2.5 GB of extra '
-    + 'components. Bundling them would take the installer from a few hundred megabytes to '
-    + 'nearly three gigabytes, for an option not everyone uses.',
-  'ui.modale.jeton.source2': 'It stays available in the source version of the project: the '
-    + 'installer sets up PyTorch and pyannote on request. The steps are described in the '
-    + 'README file, "Speaker separation" section.',
-  'ui.modale.jeton.procedure': 'View the steps',
-  'ui.modale.jeton.reste_ok': 'Everything else works normally, simply without speaker labels.',
   'ui.modale.jeton.intro': 'The model that recognises voices is made available free of '
     + 'charge, but its author asks you to accept its terms and identify yourself with a '
     + 'token. Three steps, once and for all.',

@@ -81,7 +81,7 @@ Ce qui est accéléré dans cette version : le **processeur, partout**, en quant
 
 ## Installation depuis les sources
 
-Deux raisons seulement d'emprunter cette voie : **modifier le code**, ou obtenir la **séparation des locuteurs**. Pour un usage normal, l'installation ci-dessus suffit.
+Une seule raison d'emprunter cette voie : **modifier le code**. La séparation des locuteurs, elle, s'installe d'un bouton depuis l'application, quelle que soit la version employée. Pour un usage normal, l'installation ci-dessus suffit.
 
 1. Installez [Python 3.9 ou plus récent](https://www.python.org/downloads/) en cochant **« Add python.exe to PATH »**.
 2. Double-cliquez sur **`installer.bat`**.
@@ -93,7 +93,7 @@ L'installateur est relançable, ne réinstalle que ce qui manque, et crée un en
 | Option | Effet |
 |---|---|
 | `installer.bat` | Installation standard, pose la question sur les locuteurs |
-| `installer.bat --locuteurs` | Ajoute la séparation des locuteurs (PyTorch et pyannote) |
+| `installer.bat --locuteurs` | Ajoute la séparation des locuteurs (PyTorch et pyannote), équivalent en ligne de commande du bouton de l'application |
 | `installer.bat --sans-locuteurs` | Installation légère, sans question |
 | `installer.bat --verifier` | N'affiche que le bilan de l'état du poste |
 
@@ -112,16 +112,21 @@ REM Seulement si une carte NVIDIA est présente : évite l'erreur
 REM « cublas64_12.dll introuvable » sans toucher au PATH système.
 pip install nvidia-cublas-cu12 nvidia-cudnn-cu12==9.*
 
-REM Seulement pour la séparation des locuteurs. Sans carte NVIDIA :
-pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+REM Seulement pour la separation des locuteurs, et seulement si l'on tient a
+REM la poser a la main : le bouton de l'application fait la meme chose.
+REM Sans carte NVIDIA :
+pip install torch==2.8.0 torchaudio==2.8.0 torchcodec==0.7.0 --index-url https://download.pytorch.org/whl/cpu
 REM Avec carte NVIDIA :
-pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu124
-pip install -r requirements-locuteurs.txt
+pip install torch==2.8.0 torchaudio==2.8.0 torchcodec==0.7.0 --index-url https://download.pytorch.org/whl/cu124
+REM Les versions sont repetees a dessein : pyannote.audio se contente de
+REM bornes basses, et pip irait sinon chercher sur PyPI des versions plus
+REM recentes, compilees contre un autre PyTorch.
+pip install -r requirements-locuteurs.txt torch==2.8.0 torchaudio==2.8.0 torchcodec==0.7.0 --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
 
 .venv\Scripts\pythonw transcriber.pyw
 ```
 
-Le socle fait environ 250 Mo. La séparation des locuteurs ajoute à peu près 2,5 Go parce qu'elle tire PyTorch : c'est précisément pourquoi elle est optionnelle, et pourquoi elle reste hors du programme d'installation.
+Le socle fait environ 250 Mo. La séparation des locuteurs ajoute 3,55 Go, mesurés, parce qu'elle tire PyTorch : c'est précisément pourquoi elle est optionnelle, et pourquoi elle reste hors du programme d'installation.
 
 Contrôler l'état du poste, le décodeur FFmpeg, les dossiers de travail et la détection matérielle :
 
@@ -134,7 +139,11 @@ Contrôler l'état du poste, le décodeur FFmpeg, les dossiers de travail et la 
 <details>
 <summary>Mettre en place la séparation des locuteurs</summary>
 
-Le modèle qui reconnaît les voix, pyannote, est gratuit mais sous conditions : son auteur demande de les accepter et de s'identifier.
+**Depuis l'application, c'est un bouton.** Ouvrez le panneau « Locuteurs », cliquez sur « Installer la séparation des locuteurs ». L'application annonce la taille à télécharger, environ 0,8 Go en variante processeur, l'espace nécessaire sur le disque, 6 Go, et ce qu'il reste de libre. Ces chiffres sont mesurés sur une installation réelle : 0,71 Go de roues téléchargées, 3,55 Go de fichiers posés. Elle demande confirmation, puis télécharge en arrière-plan : la progression s'affiche, l'annulation est possible à tout moment, et la transcription reste utilisable pendant ce temps. Une coupure réseau n'oblige pas à tout retélécharger : ce qui est déjà arrivé est gardé, et une relance ne redemande au réseau que ce qui manque. Elle repose en revanche les fichiers sur le disque, quelques minutes, seule façon sûre de ne pas laisser en place les restes d'une tentative interrompue.
+
+Le bouton choisit tout seul la variante adaptée au poste : processeur par défaut, CUDA si une carte NVIDIA répond. Dans la version installée, les composants vont dans `%LOCALAPPDATA%\WhiScribe\extensions`, et un second bouton permet de les retirer, avec leur poids affiché. Depuis les sources, ils vont dans le `.venv` du projet, exactement comme le fait `installer.bat --locuteurs`.
+
+**Ensuite, le jeton.** C'est une étape distincte, et elle n'a rien à voir avec le téléchargement : le modèle qui reconnaît les voix, pyannote, est gratuit mais sous conditions, et son auteur demande de les accepter et de s'identifier.
 
 1. Créez un compte sur [huggingface.co](https://huggingface.co).
 2. Ouvrez [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) et acceptez les conditions.
@@ -162,6 +171,7 @@ app/
   audio.py            FFmpeg, durée, décodage 16 kHz mono
   moteur.py           faster-whisper, chargement et libération
   diarisation.py      pyannote, jeton, attribution des locuteurs
+  extensions.py       installation de la séparation des locuteurs, pip embarqué
   vocabulaire.py      glossaire, amorce, corrections
   sorties.py          txt, srt, vtt, en-têtes
   nommage.py          motif de nom des fichiers produits
@@ -202,7 +212,7 @@ La publication est automatisée : poser un tag `vX.Y.Z` déclenche `.github/work
 pip install -r requirements.txt -r requirements-build.txt
 pyinstaller --noconfirm --clean --distpath dist --workpath build packaging\whiscribe.spec
 dist\WhiScribe\whiscribe-verifier.exe
-iscc /DVersionApp=2.2.0 packaging\setup.iss
+iscc /DVersionApp=2.3.0 packaging\setup.iss
 ```
 
 Le numéro de version a une seule source, `VERSION` dans `app/__init__.py`, et le workflow refuse de publier si le tag ne lui correspond pas. PyInstaller 6.22 est le minimum : les versions antérieures ne savent pas geler numpy 2.5.
@@ -220,6 +230,22 @@ Une version qui ne peut pas se mettre à jour en place s'annonce en écrivant `[
 Chaque échec est expliqué dans l'interface, en clair : fichier illisible, modèle à télécharger, mémoire insuffisante, jeton absent ou invalide, disque plein, bibliothèques CUDA manquantes. Aucun traceback n'apparaît à l'écran.
 
 Le détail technique part dans un fichier horodaté du dossier `logs/`, dont le nom est cité dans le message d'erreur. Le bouton **« Ouvrir le fichier détaillé »**, dans la barre du bas, l'ouvre directement. Les 30 derniers journaux sont conservés. C'est ce fichier qu'il faut joindre à un rapport de bug, et il est écrit en français : il s'adresse au mainteneur, pas à l'utilisateur.
+
+Trois modes s'ajoutent pour la séparation des locuteurs, sans fenêtre eux non plus. Ce sont ceux que l'application se lance à elle-même, dans un processus de fond, quand on clique sur le bouton du panneau « Locuteurs » ; ils servent aussi à valider une version construite sans rien cliquer :
+
+```bat
+REM Poser les composants, ici dans un dossier d'essai plutot que le dossier reel
+dist\WhiScribe\whiscribe-verifier.exe --installer-locuteurs --cible D:\essai --cpu
+
+REM Essayer l'import reel de torch et de pyannote. Code 0 si tout repond.
+dist\WhiScribe\whiscribe-verifier.exe --verifier-locuteurs --cible D:\essai
+
+REM Tout effacer
+dist\WhiScribe\whiscribe-verifier.exe --retirer-locuteurs --cible D:\essai
+```
+
+`--paquets` remplace la liste par la sienne, ce qui permet d'éprouver le mécanisme avec un paquet léger sans télécharger plusieurs gigaoctets. Sans `--cible`, le dossier d'extensions réel est utilisé. Depuis les sources, les mêmes options existent sur `python -m app.extensions`.
+
 
 ---
 

@@ -11,3 +11,10 @@
 
 pyinstaller>=6.22,<7
 pyinstaller-hooks-contrib>=2026.6
+
+# pip est embarqué dans le gel depuis la version 2.3.0 : c'est lui qui installe
+# la séparation des locuteurs dans le dossier d'extensions de l'utilisateur.
+# Il est présent dans tout environnement virtuel, la ligne ne sert donc qu'à
+# garantir une version qui connaisse « --progress-bar raw », d'où vient la
+# progression affichée dans l'interface.
+pip>=24.1

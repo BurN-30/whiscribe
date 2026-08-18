@@ -19,7 +19,15 @@ Ce qui n'y va JAMAIS :
   - `jeton_hf.txt`, le jeton Hugging Face. C'est un secret personnel, il ne
     doit pas se promener dans une pièce jointe ni dans un partage réseau ;
   - les modèles, plusieurs gigaoctets qui se retéléchargent tout seuls ;
+  - le dossier « extensions », où vit la séparation des locuteurs. Plusieurs
+    gigaoctets de bibliothèques compilées pour un processeur donné : les
+    transporter d'un poste à l'autre n'aurait aucun sens, et l'application sait
+    les reposer d'un bouton ;
   - les journaux, qui ne décrivent que la machine où ils ont été écrits.
+
+L'archive se construit sur une liste blanche de membres, pas sur une liste
+d'exclusions : ce qui n'est pas nommé ici ne peut pas y entrer, quoi qu'on ajoute
+un jour dans les données de l'utilisateur.
 
 À l'import, rien n'est écrit avant que l'utilisateur ait vu l'aperçu et
 confirmé, et l'état courant est systématiquement sauvegardé d'abord.
@@ -184,7 +192,7 @@ def _contenu_a_exporter() -> tuple[dict, dict]:
         # partagé avec le programme d'installation. Il n'est repris à l'import
         # que s'il existe sur le poste d'arrivée.
         "dossier_modeles": str(chemins.DOSSIER_MODELES),
-        "exclus": ["jeton_hf.txt", "logs", "modeles"],
+        "exclus": ["jeton_hf.txt", "logs", "modeles", "extensions", "cache-pip"],
     }
     return fichiers, manifeste
 

@@ -6,6 +6,96 @@ version : la chaîne de publication en extrait la section correspondant au tag.
 
 ---
 
+## 2.3.0
+
+*Non publiée.*
+
+La séparation des locuteurs s'installe d'un bouton. Elle était jusqu'ici
+réservée à la version source, ce qui revenait à demander à un utilisateur
+normal d'installer Python, de cloner un dépôt et de lancer un script pour
+obtenir « Locuteur 1 » et « Locuteur 2 ». C'est fini : le panneau
+« Locuteurs » porte désormais un bouton qui fait tout, dans les deux modes.
+
+**Le parcours**
+
+- **Avant de lancer**, l'application annonce ce qui va se passer : environ
+  0,8 Go à télécharger et 3,6 Go sur le disque en variante processeur,
+  6 Go à avoir de libre, et ce qu'il en reste réellement. Ces chiffres sont
+  mesurés sur une installation réelle, pas estimés. La confirmation est demandée, et le bouton est refusé
+  quand la place manque, avec la raison.
+- **Pendant**, la progression s'affiche paquet par paquet, avec le
+  pourcentage du téléchargement en cours. Le travail vit dans un processus
+  de fond : la transcription reste utilisable, et l'annulation est propre à
+  tout instant.
+- **Après**, l'import de torch et de pyannote est réellement essayé, dans un
+  processus neuf. Ce n'est qu'à cette condition que la fonction est déclarée
+  disponible, et elle s'active alors sans redémarrage. Si l'import échoue,
+  l'application le dit au lieu de laisser croire à une réussite.
+- **Une coupure réseau ne fait pas tout retélécharger.** Le cache vit avec
+  les données de l'utilisateur, et une relance ne redemande au réseau que ce
+  qui manque. Elle repose en revanche les fichiers, quelques minutes de
+  disque : c'est le prix d'une reprise sûre, faute de quoi les fichiers
+  tronqués de la tentative interrompue resteraient en place.
+- **Un bouton retire l'extension**, avec son poids affiché. La
+  désinstallation du programme la compte elle aussi dans la question
+  « supprimer vos données », et annonce les gigaoctets concernés.
+
+**Sous le capot**
+
+- **pip est embarqué dans la version installée.** Il devait être collecté en
+  fichiers `.py` sur le disque et non dans l'archive du gel : sans cela,
+  `pip._vendor.distlib` ne trouve pas son chargeur de ressources et
+  l'installation s'arrête sur « Unable to locate finder ». C'est le mode de
+  collecte `{"pip": "py"}` du fichier `.spec`.
+- **La bibliothèque standard est désormais gelée en entier.** Un gel n'emporte
+  que les modules que le programme importe lui-même, ce qui suffisait tant que
+  rien ne s'ajoutait après coup. PyTorch, lui, importe des modules dont
+  WhiScribe n'a aucun usage : le premier essai s'est arrêté sur
+  « No module named 'timeit' ». Quelques mégaoctets de plus, à comparer aux
+  gigaoctets téléchargés ensuite.
+- **Les paquets vont dans un dossier d'extensions**,
+  `%LOCALAPPDATA%\WhiScribe\extensions`, ajouté au chemin d'import au
+  démarrage, avant tout import de torch. Le programme installé n'écrit
+  toujours rien dans son propre dossier.
+- **La variante suit le matériel** : index processeur par défaut, index
+  CUDA quand le pilote NVIDIA répond.
+- **Correction de deux vrais gâchis, trouvés en installant pour de vrai.**
+  pyannote.audio demande « torch>=2.8.0 » et « torchcodec>=0.7.0 » : sans
+  contrainte, pip repartait chercher sur PyPI les dernières versions, qui
+  embarquent CUDA, écrasant la version processeur à peine posée. Un
+  gigaoctet téléchargé pour rien et deux `dist-info` de torch côte à côte.
+  Pire pour torchcodec : la version prise était compilée contre un autre
+  PyTorch, elle se chargeait sur une erreur « WinError 127, la procédure
+  spécifiée est introuvable ». Les versions sont désormais figées et
+  répétées au second lot. Le correctif vaut aussi pour
+  `installer.bat --locuteurs`.
+- **Les dossiers de bibliothèques natives de l'extension sont déclarés à
+  Windows** avant tout import. Depuis Python 3.8, un dossier de DLL n'est
+  plus fouillé parce qu'il est à côté du module : il faut le nommer.
+- **Tout est demandé à pip en une seule fois.** Le découpage en deux passes
+  obligeait, pour figer les versions, à renommer PyTorch dans la seconde,
+  et « --upgrade » le reposait alors intégralement : trois gigaoctets
+  effacés puis recopiés, plusieurs minutes de disque pour rien.
+- Limite connue, écrite noir sur blanc : torchcodec cherche les
+  bibliothèques partagées de FFmpeg, que WhiScribe ne pose pas, et signale
+  bruyamment que ses décodeurs sont inertes. Sans conséquence, la
+  diarisation recevant un signal déjà décodé en mémoire.
+- Nouveaux modes de diagnostic, sans fenêtre :
+  `--installer-locuteurs`, `--verifier-locuteurs` et `--retirer-locuteurs`.
+  Le bilan de `--verifier` gagne une ligne « séparation des locuteurs »,
+  qui teste l'import réel et non la simple présence des dossiers.
+
+**Interface**
+
+- Le panneau « Locuteurs » a trois états qui se remplacent : composants
+  absents avec le bouton et les chiffres, installation en cours avec la
+  progression et l'annulation, composants en place avec la bascule
+  habituelle et le retrait.
+- L'avertissement « non incluse dans la version installée » disparaît, il
+  n'a plus lieu d'être. Le jeton Hugging Face reste demandé à part, après :
+  ce sont deux choses différentes.
+- Textes français et anglais, à parité.
+
 ## 2.2.1
 
 *Publiée le 18 août 2026.*

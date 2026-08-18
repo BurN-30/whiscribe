@@ -110,6 +110,12 @@ donnees += collect_data_files("imageio_ffmpeg", subdir="binaries")
 donnees += collect_data_files("tokenizers")
 donnees += collect_data_files("huggingface_hub")
 
+# pip est embarqué depuis la version 2.3.0 : c'est lui qui pose la séparation
+# des locuteurs dans le dossier d'extensions de l'utilisateur, sans qu'aucun
+# Python n'ait à être installé sur le poste. Ses données comprennent le magasin
+# de certificats vendu, sans lequel plus aucun téléchargement HTTPS ne passe.
+donnees += collect_data_files("pip")
+
 # CTranslate2 est une bibliothèque native : ses DLL vivent dans le paquet et
 # aucun hook ne les ramasse. C'est le point qui casse le plus souvent un gel.
 binaires = collect_dynamic_libs("ctranslate2")
@@ -135,13 +141,70 @@ imports_caches = [
     "tkinter",
     "tkinter.messagebox",
 ]
+# pip, et tout ce que la bibliothèque standard lui doit. Le listage explicite
+# des sous-modules est indispensable : le code de l'application ne l'importe
+# qu'à l'intérieur d'une fonction, et l'analyse statique ne le verrait pas.
+imports_caches += collect_submodules("pip")
 imports_caches += collect_submodules("app")
+
+
+# ---------------------------------------------------------------------------
+# Bibliothèque standard complète : le programme héberge des extensions
+#
+# Un gel ordinaire n'embarque que les modules que le code importe. C'était
+# suffisant tant que rien ne s'ajoutait après coup. Depuis la version 2.3.0,
+# l'application installe PyTorch et pyannote dans un dossier d'extensions :
+# ces bibliothèques importent des modules de la bibliothèque standard dont
+# WhiScribe n'a lui-même aucun usage, et qui ne sont donc pas là.
+#
+# Ce n'est pas une précaution théorique, et chercher les manquants un par un
+# s'est révélé sans fin : le premier essai sur un gel réel s'est arrêté sur
+# « No module named 'timeit' », le deuxième sur « No module named
+# 'unittest.mock' ». C'est toute la bibliothèque standard qui doit être là,
+# moins ce qui n'a pas de sens ici.
+#
+# Les sous-modules comptent autant que les paquets : demander « unittest » ne
+# ramène pas « unittest.mock ». D'où le passage par `collect_submodules`.
+#
+# Le coût est de quelques mégaoctets de source Python, à comparer aux
+# gigaoctets que l'utilisateur télécharge ensuite.
+# ---------------------------------------------------------------------------
+
+STDLIB_HORS_SUJET = {
+    # Blagues et curiosités : « antigravity » ouvre un navigateur à l'import.
+    "antigravity", "this",
+    # Outils de développement, jamais utiles à l'exécution, et volumineux.
+    "idlelib", "turtledemo", "turtle", "test", "lib2to3", "pydoc_data",
+    "ensurepip", "venv", "distutils", "msilib",
+    # Modules propres aux systèmes Unix : absents sous Windows de toute façon.
+    "curses", "dbm", "nis", "ossaudiodev", "spwd", "crypt", "termios", "pty",
+    "tty", "fcntl", "grp", "pwd", "posix", "resource", "syslog", "readline",
+    "_curses", "_curses_panel", "_posixshmem", "_posixsubprocess",
+    # Déjà demandés explicitement plus haut, avec leurs sous-modules.
+    "tkinter",
+}
+
+for _module in sorted(getattr(sys, "stdlib_module_names", ())):
+    if _module in STDLIB_HORS_SUJET or _module.startswith("__"):
+        continue
+    imports_caches.append(_module)
+    try:
+        imports_caches += collect_submodules(_module)
+    except Exception:
+        # Module absent de cette plateforme, ou non importable à l'analyse :
+        # le nom simple reste dans la liste, PyInstaller le signalera sans
+        # faire échouer la construction.
+        pass
+
+imports_caches = sorted(set(imports_caches))
 # Les plateformes de pywebview sont choisies à l'exécution.
 imports_caches += collect_submodules("webview.platforms")
 
 
 # La séparation des locuteurs reste hors du programme d'installation : PyTorch
-# pèse à lui seul plus de 2,5 Go. L'application le dit proprement à l'utilisateur.
+# pèse à lui seul plus de 2,5 Go. Depuis la version 2.3.0, l'application sait
+# l'installer elle-même, à la demande, dans le dossier d'extensions de
+# l'utilisateur : voir app/extensions.py.
 exclusions = [
     "torch",
     "torchaudio",
@@ -157,7 +220,6 @@ exclusions = [
     "IPython",
     "pytest",
     "setuptools",
-    "pip",
 ]
 
 
@@ -173,6 +235,12 @@ a = Analysis(
     excludes=exclusions,
     noarchive=False,
     optimize=0,
+    # pip doit atterrir en fichiers .py sur le disque, et non dans l'archive :
+    # « pip._vendor.distlib » cherche un chargeur de ressources classique et
+    # échoue sur « Unable to locate finder for 'pip._vendor.distlib' » dès que
+    # le chargeur gelé le sert. Constaté sur un gel réel, corrigé ainsi.
+    # L'analyse statique, elle, continue de voir tout le paquet.
+    module_collection_mode={"pip": "py"},
 )
 
 pyz = PYZ(a.pure)

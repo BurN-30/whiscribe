@@ -3,10 +3,11 @@ WhiScribe : paquet applicatif.
 
 Moteur unique : faster-whisper (CTranslate2), CPU int8 partout, CUDA float16
 si une carte NVIDIA est detectee. Diarisation optionnelle via pyannote.audio,
-sequencee apres la transcription pour limiter le pic memoire.
+sequencee apres la transcription pour limiter le pic memoire, et installable
+depuis l'application elle-meme (voir app/extensions.py).
 """
 
-VERSION = "2.2.1"
+VERSION = "2.3.0"
 NOM_APPLICATION = "WhiScribe"
 
 # Source unique de l'adresse du depot. A ajuster une seule fois ici si le nom du

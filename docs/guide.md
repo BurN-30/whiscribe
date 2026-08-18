@@ -81,7 +81,7 @@ Acceleration in this version: **CPU everywhere** with `int8` quantisation, which
 
 ## Run from source
 
-Only two reasons to go this way: **change the code**, or get **speaker separation**. For normal use, the setup above is enough.
+One reason left to go this way: **change the code**. Speaker separation installs from a button inside the application, whichever version you run. For normal use, the setup above is enough.
 
 1. Install [Python 3.9 or newer](https://www.python.org/downloads/), ticking **Add python.exe to PATH**.
 2. Double-click **`installer.bat`**.
@@ -93,7 +93,7 @@ The installer is re-runnable, only installs what is missing, and creates an isol
 | Option | Effect |
 |---|---|
 | `installer.bat` | Standard install, asks about speakers |
-| `installer.bat --locuteurs` | Adds speaker separation (PyTorch and pyannote) |
+| `installer.bat --locuteurs` | Adds speaker separation (PyTorch and pyannote), the command line equivalent of the button in the app |
 | `installer.bat --sans-locuteurs` | Light install, no question |
 | `installer.bat --verifier` | Prints the state of the machine and exits |
 
@@ -112,16 +112,21 @@ REM Only with an NVIDIA card: avoids the "cublas64_12.dll not found" error
 REM without touching the system PATH.
 pip install nvidia-cublas-cu12 nvidia-cudnn-cu12==9.*
 
-REM Only for speaker separation. Without an NVIDIA card:
-pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+REM Only for speaker separation, and only if you insist on doing it by hand:
+REM the button in the application does exactly this.
+REM Without an NVIDIA card:
+pip install torch==2.8.0 torchaudio==2.8.0 torchcodec==0.7.0 --index-url https://download.pytorch.org/whl/cpu
 REM With an NVIDIA card:
-pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu124
-pip install -r requirements-locuteurs.txt
+pip install torch==2.8.0 torchaudio==2.8.0 torchcodec==0.7.0 --index-url https://download.pytorch.org/whl/cu124
+REM The versions are repeated on purpose: pyannote.audio only sets lower
+REM bounds, and pip would otherwise pull newer builds from PyPI, compiled
+REM against a different PyTorch.
+pip install -r requirements-locuteurs.txt torch==2.8.0 torchaudio==2.8.0 torchcodec==0.7.0 --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
 
 .venv\Scripts\pythonw transcriber.pyw
 ```
 
-The base is about 250 MB. Speaker separation adds roughly 2.5 GB because it pulls in PyTorch, which is precisely why it is optional and why it stays out of the setup.
+The base is about 250 MB. Speaker separation adds 3.55 GB, measured, because it pulls in PyTorch, which is precisely why it is optional and why it stays out of the setup.
 
 Check the state of the machine, the FFmpeg decoder, the work folders and hardware detection:
 
@@ -133,6 +138,12 @@ Check the state of the machine, the FFmpeg decoder, the work folders and hardwar
 
 <details>
 <summary>Setting up speaker separation</summary>
+
+**From the application, it is one button.** Open the "Speakers" panel and click "Install speaker separation". The app announces the download size, about 0.8 GB for the CPU build, the room needed on disk, 6 GB, and how much is free. Those figures are measured on a real install: 0.71 GB of wheels downloaded, 3.55 GB of files laid down. It asks for confirmation, then downloads in the background: progress is shown, cancelling is possible at any point, and transcription stays usable meanwhile. A network drop does not mean downloading everything again: what already arrived is kept, and a new run only asks the network for what is missing. It does lay the files down again, a few minutes of disk, the only safe way not to leave the leftovers of an interrupted attempt in place.
+
+The button picks the right build on its own: CPU by default, CUDA when an NVIDIA card answers. In the installed version the components land in `%LOCALAPPDATA%\WhiScribe\extensions`, and a second button removes them, with their size shown. From source they land in the project `.venv`, exactly like `installer.bat --locuteurs`.
+
+**Then the token.** That is a separate step, unrelated to the download.
 
 The model that recognises voices, pyannote, is free but gated: its author asks you to accept the terms and identify yourself.
 
@@ -162,6 +173,7 @@ app/
   audio.py            FFmpeg, duration, 16 kHz mono decoding
   moteur.py           faster-whisper, loading and release
   diarisation.py      pyannote, token, speaker attribution
+  extensions.py       speaker separation install, embedded pip
   vocabulaire.py      glossary, prompt, corrections
   sorties.py          txt, srt, vtt, headers
   nommage.py          output file name pattern
@@ -202,7 +214,7 @@ Publication is automated: pushing a `vX.Y.Z` tag triggers `.github/workflows/rel
 pip install -r requirements.txt -r requirements-build.txt
 pyinstaller --noconfirm --clean --distpath dist --workpath build packaging\whiscribe.spec
 dist\WhiScribe\whiscribe-verifier.exe
-iscc /DVersionApp=2.2.0 packaging\setup.iss
+iscc /DVersionApp=2.3.0 packaging\setup.iss
 ```
 
 The version number has a single source, `VERSION` in `app/__init__.py`, and the workflow refuses to publish if the tag does not match. PyInstaller 6.22 is the minimum: earlier versions cannot freeze numpy 2.5.
@@ -220,6 +232,21 @@ A release that cannot update in place is announced by writing `[reinstallation-r
 Every failure is explained in the interface, in plain language: unreadable file, model to download, not enough memory, missing or invalid token, full disk, missing CUDA libraries. No traceback ever reaches the screen.
 
 The technical detail goes to a timestamped file in `logs/`, whose name is quoted in the error message. The **Open the detailed log** button, in the bottom bar, opens it directly. The last 30 logs are kept. That file is what to attach to a bug report, and the logs are written in French: they are aimed at the maintainer, not at the user.
+
+Three more modes cover speaker separation, again without a window. They are what the application runs against itself, in a background process, when the button in the "Speakers" panel is clicked; they also serve to validate a build without clicking anything:
+
+```bat
+REM Install the components, here into a scratch folder rather than the real one
+dist\WhiScribe\whiscribe-verifier.exe --installer-locuteurs --cible D:\scratch --cpu
+
+REM Actually import torch and pyannote. Exit code 0 when both answer.
+dist\WhiScribe\whiscribe-verifier.exe --verifier-locuteurs --cible D:\scratch
+
+REM Wipe it
+dist\WhiScribe\whiscribe-verifier.exe --retirer-locuteurs --cible D:\scratch
+```
+
+`--paquets` replaces the list with your own, which proves the mechanism with a light package instead of several gigabytes. Without `--cible`, the real extensions folder is used. From source, the same options live on `python -m app.extensions`.
 
 ---
 

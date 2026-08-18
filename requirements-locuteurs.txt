@@ -1,7 +1,16 @@
-# Séparation des locuteurs, optionnelle. Environ 2,5 Go de plus.
-# PyTorch doit être installé AVANT ce fichier, avec l'index adapté au matériel :
-#   sans carte NVIDIA : pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
-#   avec carte NVIDIA : pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu124
-# « installer.bat » s'en charge automatiquement.
+# Séparation des locuteurs, optionnelle. Environ 3,6 Go une fois installée.
+#
+# Le plus simple est le bouton « Installer la séparation des locuteurs » du
+# panneau « Locuteurs » de l'application : il fait tout, dans les deux modes.
+# Ce fichier reste pour l'installation manuelle et pour « installer.bat ».
+#
+# PyTorch doit être installé AVANT, avec l'index adapté au matériel :
+#   sans carte NVIDIA : pip install torch==2.8.0 torchaudio==2.8.0 torchcodec==0.7.0 --index-url https://download.pytorch.org/whl/cpu
+#   avec carte NVIDIA : pip install torch==2.8.0 torchaudio==2.8.0 torchcodec==0.7.0 --index-url https://download.pytorch.org/whl/cu124
+#
+# torchcodec est figé à dessein : pyannote.audio se contente de « >=0.7.0 »,
+# et la dernière version est compilée contre un PyTorch bien plus récent. Elle
+# se charge alors sur « WinError 127, la procédure spécifiée est introuvable ».
+# 0.7 est la version qui accompagne torch 2.8.
 
 pyannote.audio==4.0.4
