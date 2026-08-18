@@ -352,12 +352,13 @@
     <div class="bloc-reglage">
       <span class="titre-section" data-i18n="ui.section.donnees"></span>
       <div class="sous-libelle" data-i18n="ui.donnees.etat"></div>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="bouton" id="btn-exporter-donnees" style="flex:1">
+      <!-- Empilés : côte à côte, les libellés nowrap débordaient des 380 px de la colonne (scroll horizontal). -->
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+        <button class="bouton" id="btn-exporter-donnees" style="justify-content:center">
           <svg class="icone-s icone"><use href="#i-export"></use></svg>
           <span data-i18n="ui.bouton.exporter"></span>
         </button>
-        <button class="bouton" id="btn-importer-donnees" style="flex:1">
+        <button class="bouton" id="btn-importer-donnees" style="justify-content:center">
           <svg class="icone-s icone"><use href="#i-import"></use></svg>
           <span data-i18n="ui.bouton.importer"></span>
         </button>

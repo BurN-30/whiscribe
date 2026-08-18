@@ -10,6 +10,7 @@ version : la chaîne de publication en extrait la section correspondant au tag.
 
 *Publiée le 18 août 2026.*
 
+- Correction : les boutons Exporter et Importer débordaient de la colonne des réglages et y créaient un défilement horizontal, ils sont empilés en pleine largeur et le volet refuse désormais tout défilement horizontal.
 - Correction : le clic sur la zone de dépôt (et Ctrl+O) n'ouvrait jamais le sélecteur de fichiers, le filtre d'extensions étant séparé par des espaces là où pywebview exige des points-virgules. Tous les filtres de dialogue sont désormais validés par le parseur de pywebview lui-même.
 
 ## 2.2.0

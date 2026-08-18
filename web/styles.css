@@ -187,6 +187,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-left: 1px solid var(--bordure);
   background: var(--carte);
   overflow-y: auto;
+  /* Jamais de defilement horizontal dans le volet : un contenu trop large est un bug a corriger, pas a faire defiler. */
+  overflow-x: hidden;
 }
 
 /* ------------------------------------------------------------------ Carte */
