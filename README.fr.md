@@ -48,6 +48,13 @@ Le programme d'installation n'est pas signé, SmartScreen peut donc avertir au p
 
 ---
 
+## Langues
+
+- **Interface :** français et anglais. Elle suit la langue du système, et se change dans les réglages.
+- **Transcription :** dix langues au sélecteur, français, anglais, espagnol, allemand, italien, néerlandais, portugais, polonais, roumain, arabe, chacune avec son indicateur honnête de qualité, plus la **détection automatique**, qui ouvre tout ce que couvrent les modèles Whisper, une centaine de langues. Une seule langue parlée par enregistrement.
+
+---
+
 ## Vie privée
 
 **Rien de ce que vous transcrivez ne quitte votre ordinateur.** Pas de compte, pas de clé d'API, pas d'envoi vers un service en ligne, pas de télémétrie. L'audio est lu depuis votre disque, calculé par votre processeur, et le texte est écrit à côté.

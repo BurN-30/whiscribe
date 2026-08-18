@@ -48,6 +48,13 @@ The installer is not signed, so SmartScreen may warn on first run: "More info", 
 
 ---
 
+## Languages
+
+- **Interface:** English and French. Follows your system language, switchable in the settings.
+- **Transcription:** ten languages in the selector, French, English, Spanish, German, Italian, Dutch, Portuguese, Polish, Romanian, Arabic, each with an honest quality indicator, plus **automatic detection**, which opens up everything the Whisper models cover, about a hundred languages. One spoken language per recording.
+
+---
+
 ## Privacy
 
 **Nothing you transcribe leaves your computer.** No account, no API key, no upload to an online service, no telemetry. The audio is read from your disk, computed by your processor, and the text is written next to it.
