@@ -163,6 +163,12 @@ def expliquer(exc: BaseException, contexte: str = "") -> tuple[str, str]:
     if "connection" in texte or "timed out" in texte or "getaddrinfo" in texte or "max retries" in texte:
         return couple("err.reseau")
 
+    # Poids absents ou tronques : l'application repare d'elle-meme avant d'en
+    # arriver la (voir app/moteur.py). Si le message remonte quand meme, c'est
+    # que la reparation n'a pas pu se faire, et il faut le dire en francais.
+    if "model.bin" in texte or "unable to open file" in texte:
+        return couple("err.modele")
+
     if "cudnn" in texte or "cublas" in texte or "cuda" in texte:
         return couple("err.cuda")
 

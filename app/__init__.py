@@ -7,7 +7,7 @@ sequencee apres la transcription pour limiter le pic memoire, et installable
 depuis l'application elle-meme (voir app/extensions.py).
 """
 
-VERSION = "2.3.0"
+VERSION = "2.3.1"
 NOM_APPLICATION = "WhiScribe"
 
 # Source unique de l'adresse du depot. A ajuster une seule fois ici si le nom du

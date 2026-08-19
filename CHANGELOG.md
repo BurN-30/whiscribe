@@ -6,6 +6,47 @@ version : la chaîne de publication en extrait la section correspondant au tag.
 
 ---
 
+## 2.3.1
+
+*Publiée le 19 août 2026.*
+
+Un modèle laissé à moitié téléchargé se répare tout seul.
+
+Un premier téléchargement de large-v3 interrompu laissait le dossier du
+modèle en place, sans ses poids. huggingface le voyait alors comme déjà
+présent, et le lancement suivant se terminait sur un message technique brut,
+« Unable to open file model.bin ». La seule issue était de supprimer le
+dossier à la main, dans un terminal : inacceptable pour un outil qui se veut
+prêt à l'emploi.
+
+- **Avant de charger**, l'application contrôle que les poids sont réellement
+  là et utilisables : « model.bin » présent dans l'instantané, d'une taille
+  plausible, avec sa configuration, et aucun fichier encore en cours de
+  réception. Le contrôle traverse les liens symboliques comme les copies,
+  les deux formes de rangement que huggingface utilise selon le poste.
+- **Si le modèle est incomplet**, son dossier de cache est supprimé, lui seul,
+  et le téléchargement repart de zéro dans la foulée, avec les mêmes messages
+  que le premier usage. L'interface annonce que le modèle était incomplet et
+  qu'il est renouvelé, la file suit son cours, le fichier en cours n'est pas
+  perdu. Si le réseau manque, le message reste en français et le fichier est
+  traité comme les autres échecs réseau.
+- **Un filet de sécurité** rattrape le cas où le contrôle n'aurait rien vu :
+  un refus d'ouverture des poids déclenche une réparation puis un seul
+  nouvel essai. Plus aucun traceback ne peut remonter à l'écran pour ce motif.
+- **Le panneau « Modèles »** ne compte plus un modèle incomplet comme
+  téléchargé, il le signale et annonce qu'il sera renouvelé au prochain usage.
+- **La vérification de mise à jour** ne crie plus au loup : un dépôt privé
+  répond 404 à l'API publique, un quota atteint répond 403. Ce sont des
+  « vérification indisponible », désormais journalisés en information. Rien
+  n'a jamais été affiché à l'utilisateur dans ces cas, rien ne change de ce
+  côté.
+- **Le harnais de vérification** couvre l'ensemble sans rien télécharger :
+  faux dossiers de cache fabriqués dans un dossier temporaire, détection,
+  suppression du bon dossier et de lui seul, enchaînement sur le
+  téléchargement, et niveaux de journal de la vérification de mise à jour.
+
+---
+
 ## 2.3.0
 
 *Publiée le 19 août 2026.*

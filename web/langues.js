@@ -246,6 +246,8 @@ fr: {
   'ui.modeles.aide': 'Les modèles se téléchargent une seule fois, au premier usage{tailles}. '
     + 'Espace libre sur ce disque : {libre}.',
   'ui.modeles.tailles': ' ({liste})',
+  'ui.modeles.incomplets': 'Modèle incomplet détecté ({liste}) : un téléchargement a été '
+    + 'interrompu. Il sera renouvelé tout seul au prochain usage, rien à faire.',
 
   /* -- réglages : mes données ------------------------------------------- */
   'ui.section.donnees': 'Mes données',
@@ -713,6 +715,8 @@ en: {
   'ui.modeles.aide': 'Models are downloaded once, on first use{tailles}. Free space on this '
     + 'disk: {libre}.',
   'ui.modeles.tailles': ' ({liste})',
+  'ui.modeles.incomplets': 'Incomplete model found ({liste}): a download was interrupted. '
+    + 'It will be renewed on its own at the next use, nothing to do.',
 
   'ui.section.donnees': 'My data',
   'ui.donnees.etat': 'Glossary, corrections, AI template and settings',

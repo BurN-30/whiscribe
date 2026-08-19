@@ -481,10 +481,15 @@ function majModeles() {
   chemin.title = m.dossier || '';
 
   const tailles = liste.map((p) => p.nom + ' ' + p.taille).join(', ');
+  // Un modele incomplet, laisse par un telechargement coupe, n'est pas compte
+  // comme present : on le dit, et on dit aussi que l'application s'en charge.
+  const incomplets = m.incomplets || [];
   $('#aide-modeles').textContent = t('ui.modeles.aide', {
     tailles: tailles ? t('ui.modeles.tailles', { liste: tailles }) : '',
     libre: m.libre || '--',
-  });
+  }) + (incomplets.length
+    ? ' ' + t('ui.modeles.incomplets', { liste: incomplets.join(', ') })
+    : '');
 }
 
 function onDossierModeles(retour) {

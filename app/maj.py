@@ -13,6 +13,11 @@ d'attente court et échoue toujours en silence : un poste hors ligne, un
 pare-feu ou une panne de GitHub ne doivent produire aucun message à l'écran,
 seulement une ligne de journal.
 
+Tant que le dépôt reste privé, l'API publique répond 404 à tout le monde : c'est
+le fonctionnement attendu, pas une panne. Ce cas, comme le 403 du quota, est
+journalisé en information et non en avertissement, pour ne pas faire lire une
+alerte à quelqu'un qui n'a rien à corriger.
+
 RÉINSTALLATION COMPLÈTE
 -----------------------
 Presque toutes les versions s'installent par-dessus la précédente sans rien
@@ -53,6 +58,11 @@ INTERVALLE_HEURES = 24
 
 #: Petit état persistant, à côté de la configuration.
 FICHIER_ETAT = "maj-etat.json"
+
+#: Codes HTTP qui ne disent pas « panne » mais « pas de réponse à donner » :
+#: 404 pour un dépôt privé ou sans Release, 403 pour le quota de l'API publique.
+#: Ils se journalisent en information, jamais en avertissement.
+CODES_INDISPONIBLE = (403, 404)
 
 
 def _depot() -> str:
@@ -214,6 +224,19 @@ def verifier(version_courante: str = VERSION, forcer: bool = False) -> dict:
 
     try:
         publication = _interroger(url)
+    except urllib.error.HTTPError as exc:
+        # 404 : dépôt privé, ou aucune Release publiée. 403 : quota de l'API
+        # publique atteint. Aucun des deux n'est un incident, ce sont des
+        # « vérification indisponible aujourd'hui » : une ligne d'information,
+        # rien de plus, et surtout aucun avertissement alarmant dans le journal
+        # d'un utilisateur qui n'y peut rien.
+        if exc.code in CODES_INDISPONIBLE:
+            journal.info(
+                "Vérification de mise à jour indisponible (HTTP %s), sans conséquence.",
+                exc.code)
+        else:
+            journal.attention("Vérification de mise à jour sans réponse : %s", exc)
+        return {"disponible": False}
     except (urllib.error.URLError, OSError, TimeoutError, ValueError) as exc:
         # Hors ligne, pare-feu, GitHub en panne, réponse illisible : rien à
         # l'écran, une ligne de journal, et on réessaiera demain.

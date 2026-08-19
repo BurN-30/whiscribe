@@ -1,7 +1,7 @@
 """
 Vérification en ligne de commande des fonctions périphériques.
 
-Sept sujets, tous vérifiables sans ouvrir de fenêtre, sans transcrire quoi que
+Huit sujets, tous vérifiables sans ouvrir de fenêtre, sans transcrire quoi que
 ce soit et **sans le moindre appel réseau** :
 
   1. la scrutation du dossier surveillé, avec de vrais fichiers déposés dans un
@@ -16,7 +16,12 @@ ce soit et **sans le moindre appel réseau** :
   6. la plomberie COM en ctypes pur de la barre des tâches Windows, jusqu'à
      l'initialisation de l'objet ;
   7. l'amorce du glossaire, dont l'en-tête suit la langue parlée et non celle
-     de l'interface, et son budget de jetons.
+     de l'interface, et son budget de jetons ;
+  8. l'autoréparation d'un modèle laissé incomplet par un téléchargement
+     interrompu : de faux dossiers de cache sont fabriqués pour l'occasion, la
+     détection les reconnaît, la suppression n'emporte que le bon dossier, et
+     le chargement enchaîne sur un nouveau téléchargement. Rien n'est
+     réellement téléchargé, le moteur est simulé.
 
 Rien de ce que fait ce script ne touche à l'installation : tout se passe dans
 un dossier temporaire, effacé à la fin.
@@ -372,11 +377,61 @@ def essai_cadence_maj() -> None:
 
         maj._ecrire_etat({"derniere": "n'importe quoi"})
         verifier(maj.verification_due(), "un état illisible ne bloque pas la vérification")
+
+        essai_maj_indisponible()
     finally:
         if existait:
             fichier.write_text(sauvegarde, encoding="utf-8")
         else:
             fichier.unlink(missing_ok=True)
+
+
+def essai_maj_indisponible() -> None:
+    """
+    Un dépôt privé répond 404 à l'API publique, un quota atteint répond 403.
+    Ni l'un ni l'autre n'est un incident : le journal doit rester en INFO, et
+    l'interface ne rien recevoir. Aucun appel réseau ici, l'interrogation est
+    remplacée par l'exception qu'elle produirait.
+    """
+    import urllib.error
+
+    from app import journal
+
+    traces: dict[str, list[str]] = {"info": [], "attention": []}
+    interrogation = maj._interroger
+    ecrire_info, ecrire_attention = journal.info, journal.attention
+
+    def echec(code: int):
+        def lever(_url: str) -> dict:
+            raise urllib.error.HTTPError(_url, code, "Not Found", {}, None)  # type: ignore[arg-type]
+        return lever
+
+    try:
+        journal.info = lambda message, *args: traces["info"].append(str(message) % args if args else str(message))
+        journal.attention = lambda message, *args: traces["attention"].append(str(message) % args if args else str(message))
+
+        for code in (404, 403):
+            traces["info"].clear()
+            traces["attention"].clear()
+            maj._interroger = echec(code)
+            resultat = maj.verifier("2.0.0", forcer=True)
+            verifier(not resultat.get("disponible"),
+                     f"HTTP {code} : rien n'est proposé à l'utilisateur", str(resultat))
+            verifier(not traces["attention"],
+                     f"HTTP {code} : aucun avertissement dans le journal",
+                     " | ".join(traces["attention"]))
+            verifier(any(str(code) in ligne for ligne in traces["info"]),
+                     f"HTTP {code} : une simple ligne d'information",
+                     " | ".join(traces["info"]))
+
+        traces["attention"].clear()
+        maj._interroger = echec(500)
+        maj.verifier("2.0.0", forcer=True)
+        verifier(bool(traces["attention"]),
+                 "une vraie panne de GitHub reste un avertissement")
+    finally:
+        maj._interroger = interrogation
+        journal.info, journal.attention = ecrire_info, ecrire_attention
 
 
 def essai_barre_taches() -> None:
@@ -453,6 +508,151 @@ def essai_langues() -> None:
         langues.definir("fr")
 
 
+# ---------------------------------------------------------------------------
+# 8. Modèle laissé incomplet par un téléchargement interrompu
+#
+# Aucun modèle réel n'est téléchargé : on fabrique de fausses arborescences de
+# cache huggingface dans un dossier temporaire, ce qui suffit à prouver la
+# détection, la suppression ciblée, et le fait que le chargement bascule bien
+# vers un nouveau téléchargement.
+# ---------------------------------------------------------------------------
+
+DEPOT_ABIME = "Systran/faster-whisper-large-v3"
+DEPOT_SAIN = "Systran/faster-whisper-small"
+DEPOT_TRONQUE = "Systran/faster-whisper-medium"
+DEPOT_EN_COURS = "Systran/faster-whisper-base"
+
+
+def _fabriquer_modele(racine: Path, depot: str, poids: int | None,
+                      config: bool = True, en_cours: bool = False) -> Path:
+    """
+    Fabrique un dossier de cache huggingface. `poids` à None laisse le snapshot
+    sans « model.bin », c'est exactement ce que laisse une coupure.
+    """
+    from app import moteur
+
+    dossier = racine / (moteur.PREFIXE_CACHE + depot.replace("/", "--"))
+    snapshot = dossier / "snapshots" / ("0" * 40)
+    snapshot.mkdir(parents=True)
+    (dossier / "refs").mkdir()
+    (dossier / "refs" / "main").write_text("0" * 40, encoding="utf-8")
+    if config:
+        (snapshot / "config.json").write_text("{}", encoding="utf-8")
+    if poids is not None:
+        (snapshot / moteur.NOM_POIDS).write_bytes(b"0" * poids)
+    if en_cours:
+        (dossier / "blobs").mkdir(exist_ok=True)
+        (dossier / "blobs" / ("a" * 16 + moteur.SUFFIXE_INCOMPLET)).write_bytes(b"0" * 128)
+    return dossier
+
+
+def essai_modele_incomplet(base: Path) -> None:
+    titre("Modèle incomplet : détection, suppression ciblée, retéléchargement")
+
+    from types import SimpleNamespace
+
+    from app import chemins, moteur
+
+    racine = base / "modeles-fictifs"
+    racine.mkdir()
+
+    complet = _fabriquer_modele(racine, DEPOT_SAIN, moteur.TAILLE_MINIMALE_POIDS + 1)
+    abime = _fabriquer_modele(racine, DEPOT_ABIME, None)
+    tronque = _fabriquer_modele(racine, DEPOT_TRONQUE, 4096)
+    en_cours = _fabriquer_modele(racine, DEPOT_EN_COURS,
+                                 moteur.TAILLE_MINIMALE_POIDS + 1, en_cours=True)
+    voisin = racine / "mes-affaires"
+    voisin.mkdir()
+    (voisin / "note.txt").write_text("a garder", encoding="utf-8")
+
+    # -- détection ---------------------------------------------------------
+    etat = moteur.etat_modele(DEPOT_SAIN, racine)
+    verifier(etat["etat"] == "complet", "un modèle entier est vu comme complet", str(etat))
+
+    etat = moteur.etat_modele(DEPOT_ABIME, racine)
+    verifier(etat["etat"] == "incomplet" and etat["reparable"],
+             "un snapshot sans model.bin est vu comme incomplet et réparable", str(etat))
+    verifier(moteur.NOM_POIDS in etat["motif"], "le motif nomme le fichier absent",
+             etat["motif"])
+
+    etat = moteur.etat_modele(DEPOT_TRONQUE, racine)
+    verifier(etat["etat"] == "incomplet", "un model.bin tronqué est vu comme incomplet",
+             str(etat))
+
+    etat = moteur.etat_modele(DEPOT_EN_COURS, racine)
+    verifier(etat["etat"] == "incomplet",
+             "un fichier « .incomplete » suffit à déclasser le modèle", str(etat))
+
+    etat = moteur.etat_modele("Systran/faster-whisper-tiny", racine)
+    verifier(etat["etat"] == "absent", "un modèle jamais téléchargé reste « absent »",
+             str(etat))
+
+    # -- suppression, et rien d'autre --------------------------------------
+    verifier(moteur.supprimer_modele(DEPOT_ABIME, racine), "le modèle incomplet est supprimé")
+    verifier(not abime.exists(), "son dossier a bien disparu")
+    verifier(complet.is_dir() and tronque.is_dir() and en_cours.is_dir(),
+             "les autres modèles sont intacts")
+    verifier(voisin.is_dir() and (voisin / "note.txt").exists(),
+             "un dossier voisin étranger au cache n'est pas touché")
+    verifier(len(list(racine.iterdir())) == 4, "un seul dossier en moins",
+             str(sorted(p.name for p in racine.iterdir())))
+
+    verifier(not moteur.supprimer_modele(DEPOT_ABIME, racine),
+             "supprimer deux fois ne lève rien et ne prétend rien")
+    verifier(not moteur.supprimer_modele("", racine),
+             "un nom de modèle vide n'efface rien")
+    verifier(racine.is_dir() and len(list(racine.iterdir())) == 4,
+             "le dossier des modèles est toujours là")
+
+    # -- après réparation, le chemin du téléchargement -----------------------
+    verifier(moteur.etat_modele(DEPOT_ABIME, racine)["etat"] == "absent",
+             "une fois réparé, le modèle est simplement « absent », donc à télécharger")
+
+    # -- le chargement enchaîne réparation puis téléchargement ---------------
+    ancien = chemins.DOSSIER_MODELES
+    chemins.DOSSIER_MODELES = racine
+    appels: list[str] = []
+    messages: list[tuple[str, str]] = []
+    try:
+        instance = moteur.MoteurTranscription(
+            SimpleNamespace(peripherique="cpu", fils_calcul=4), forcer_processeur=True)
+        instance._instancier = lambda modele: appels.append(modele) or "modele-simule"
+
+        instance.charger(DEPOT_TRONQUE, lambda niveau, texte: messages.append((niveau, texte)))
+        verifier(not tronque.exists(), "au chargement, le modèle tronqué est effacé")
+        verifier(appels == [DEPOT_TRONQUE], "le téléchargement est bien enchaîné une fois",
+                 str(appels))
+        verifier(any("incomplet" in texte for _, texte in messages),
+                 "l'interface est prévenue que le modèle était incomplet",
+                 " | ".join(texte for _, texte in messages))
+
+        # Filet de sécurité : des poids que la détection croit sains mais que
+        # faster-whisper refuse. Une seule reprise, après réparation.
+        essais = {"n": 0}
+
+        def instancier_capricieux(modele: str):
+            essais["n"] += 1
+            if essais["n"] == 1:
+                raise RuntimeError(
+                    f"Unable to open file 'model.bin' in model '{complet}'")
+            return "modele-simule"
+
+        instance.liberer()
+        instance._instancier = instancier_capricieux
+        instance.charger(DEPOT_SAIN, lambda niveau, texte: messages.append((niveau, texte)))
+        verifier(essais["n"] == 2, "un refus sur model.bin déclenche une seule reprise",
+                 str(essais["n"]))
+        verifier(not complet.exists(), "le dossier fautif a été renouvelé au passage")
+    finally:
+        chemins.DOSSIER_MODELES = ancien
+        chemins.confiner_cache_huggingface()
+
+    verifier(moteur._poids_illisible(RuntimeError("Unable to open file 'model.bin'")),
+             "l'erreur de faster-whisper est reconnue")
+    verifier(not moteur._poids_illisible(OSError("disque plein")),
+             "une erreur sans rapport ne déclenche pas de réparation")
+
+
 def essai_amorce() -> None:
     """
     L'amorce du glossaire suit la langue PARLÉE, jamais celle de l'interface.
@@ -509,6 +709,7 @@ def principal() -> int:
         essai_barre_taches()
         essai_langues()
         essai_amorce()
+        essai_modele_incomplet(base)
 
     print(f"\n{'=' * 54}")
     if _echecs:

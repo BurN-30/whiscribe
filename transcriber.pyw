@@ -425,21 +425,26 @@ class Passerelle:
 
     def _annonce_telechargement(self) -> str:
         """
-        Phrase affichée quand le modèle choisi n'est pas encore sur la machine.
+        Phrase affichée quand le modèle choisi n'est pas encore utilisable.
 
         C'est le seul moment où l'application a besoin d'Internet : il faut le
-        dire avant, avec la taille, et pas au milieu d'une transcription.
+        dire avant, avec la taille, et pas au milieu d'une transcription. Un
+        modèle laissé incomplet par une coupure a sa propre phrase : ce n'est
+        pas un premier usage, et l'utilisateur n'a rien à faire de particulier.
         """
         from app import moteur
 
         modele = self._modele_courant()
         try:
-            if moteur.modele_deja_telecharge(modele):
-                return ""
+            etat = moteur.etat_modele(modele)["etat"]
         except Exception:
             return ""
+        if etat == "complet":
+            return ""
+        cle = ("app.telechargement_reparation" if etat == "incomplet"
+               else "app.telechargement_annonce")
         return langues.t(
-            "app.telechargement_annonce",
+            cle,
             modele=moteur.nom_court(modele),
             taille=moteur.taille_annoncee(modele),
             dossier=chemins.DOSSIER_MODELES,
@@ -453,20 +458,28 @@ class Passerelle:
         from app import moteur
 
         etat_presets = []
+        incomplets = []
         for p in presets.PRESETS.values():
             try:
-                present = moteur.modele_deja_telecharge(p["modele"])
+                etat = moteur.etat_modele(p["modele"])["etat"]
             except Exception:
-                present = False
+                etat = "absent"
+            nom_modele = moteur.nom_court(p["modele"])
+            if etat == "incomplet":
+                incomplets.append(nom_modele)
             etat_presets.append({
                 "cle": p["cle"],
                 "nom": presets.nom_preset(p["cle"]),
-                "modele": moteur.nom_court(p["modele"]),
+                "modele": nom_modele,
                 "taille": langues.octets(p["telechargement_go"] * 1024 ** 3),
-                "present": present,
+                # Un modèle incomplet n'est pas « présent » : le compter comme
+                # tel ferait croire à l'utilisateur qu'il est prêt à servir.
+                "present": etat == "complet",
+                "etat": etat,
             })
 
         return {
+            "incomplets": incomplets,
             "dossier": str(dossier),
             "defaut": str(chemins.dossier_modeles_defaut()),
             "personnalise": chemins.FICHIER_CHOIX_MODELES.exists(),
@@ -1130,15 +1143,21 @@ class Passerelle:
         Renvoie un refus expliqué si le modèle manque et que rien ne permet de
         l'obtenir (pas de réseau, pas de place), sinon None. Quand le modèle
         manque mais que tout est réuni, on se contente d'annoncer la taille.
+
+        Un modèle incomplet suit exactement le même chemin : il sera effacé puis
+        retéléchargé au chargement, ce sont donc les mêmes contrôles de place et
+        de réseau qui valent, avec d'autres mots.
         """
         from app import moteur
 
         modele = self._modele_courant()
         try:
-            if moteur.modele_deja_telecharge(modele):
-                return None
+            etat = moteur.etat_modele(modele)["etat"]
         except Exception:
             return None
+        if etat == "complet":
+            return None
+        incomplet = etat == "incomplet"
 
         taille = moteur.taille_annoncee(modele)
         dossier = chemins.DOSSIER_MODELES
@@ -1168,11 +1187,15 @@ class Passerelle:
         if not moteur.connexion_disponible():
             return {
                 "ok": False,
-                "message": langues.t("app.modele.hors_ligne", taille=taille),
+                "message": langues.t(
+                    "app.modele.incomplet_hors_ligne" if incomplet
+                    else "app.modele.hors_ligne",
+                    taille=taille),
             }
 
         self._sur_journal("attention", langues.t(
-            "app.modele.premier_usage", taille=taille, dossier=dossier))
+            "app.modele.incomplet" if incomplet else "app.modele.premier_usage",
+            taille=taille, dossier=dossier))
         return None
 
     def arreter(self) -> None:

@@ -104,6 +104,13 @@ _FR: dict[str, str] = {
         "échoué. Vérifiez la connexion Internet, puis relancez : une fois téléchargé, "
         "le modèle reste local et l'application n'a plus besoin du réseau."
     ),
+    "err.modele.titre": "Modèle de transcription inutilisable",
+    "err.modele.msg": (
+        "Les fichiers du modèle sont absents ou abîmés, et le dossier n'a pas pu être "
+        "renouvelé automatiquement. Fermez les autres applications qui pourraient "
+        "l'ouvrir, puis relancez la transcription : le modèle sera retéléchargé. Le "
+        "dossier des modèles se retrouve dans les réglages, section « Modèles »."
+    ),
     "err.cuda.titre": "Accélération NVIDIA indisponible",
     "err.cuda.msg": (
         "Les bibliothèques CUDA (cuBLAS, cuDNN) n'ont pas pu être chargées. "
@@ -227,6 +234,16 @@ _FR: dict[str, str] = {
     "moteur.premier_usage": (
         "Premier usage de ce modèle : téléchargement d'environ {taille}. Cela n'arrive "
         "qu'une fois, ensuite tout reste sur la machine."
+    ),
+    "moteur.modele_incomplet": (
+        "Le modèle « {modele} » était incomplet, un téléchargement précédent a été "
+        "interrompu. Il est retéléchargé maintenant, environ {taille}. La transcription "
+        "reprendra toute seule ensuite."
+    ),
+    "moteur.modele_incomplet_bloque": (
+        "Le modèle « {modele} » est incomplet et son dossier n'a pas pu être renouvelé. "
+        "Il est peut-être ouvert par un autre programme. Fermez les autres applications "
+        "puis relancez, ou effacez « {dossier} »."
     ),
     "moteur.chargement": "Chargement du modèle {modele}...",
     "moteur.taille_inconnue": "quelques centaines de Mo à 3 Go",
@@ -622,6 +639,12 @@ _FR: dict[str, str] = {
         "« {dossier} ». Une connexion Internet est nécessaire pour cette étape, et pour "
         "elle seulement : ensuite l'application fonctionne entièrement hors ligne."
     ),
+    "app.telechargement_reparation": (
+        "Le modèle « {modele} » est présent mais incomplet : un téléchargement précédent "
+        "a été interrompu. Il sera renouvelé automatiquement au lancement de la "
+        "prochaine transcription, environ {taille}, dans « {dossier} ». Rien à faire, "
+        "une connexion Internet suffit."
+    ),
     "app.modeles.range": "Les modèles seront rangés dans « {dossier} ».",
     "app.modeles.ancien": (
         " L'ancien dossier « {ancien} » n'a pas été touché, vous pouvez le supprimer si "
@@ -688,9 +711,19 @@ _FR: dict[str, str] = {
         "fonctionnera définitivement hors ligne. Si un modèle plus léger vous suffit, le "
         "preset « Rapide » demande 1,6 Go au lieu de 3,1 Go."
     ),
+    "app.modele.incomplet_hors_ligne": (
+        "Le modèle présent sur cette machine est incomplet : le téléchargement précédent "
+        "a été interrompu avant la fin. Il doit être repris, environ {taille}, or aucune "
+        "connexion Internet n'a été trouvée. Connectez le poste le temps de ce "
+        "téléchargement, l'application s'en occupe seule ensuite."
+    ),
     "app.modele.premier_usage": (
         "Premier usage de ce modèle : téléchargement d'environ {taille} vers « {dossier} ». "
         "Cela n'arrive qu'une fois, ensuite tout reste sur la machine."
+    ),
+    "app.modele.incomplet": (
+        "Le modèle présent est incomplet, un téléchargement précédent a été interrompu. "
+        "Il va être renouvelé automatiquement, environ {taille} vers « {dossier} »."
     ),
     "app.arret": "Arrêt demandé, la transcription en cours va s'interrompre.",
     "app.fichier_disparu": "Ce fichier n'existe plus.",
@@ -821,6 +854,13 @@ _EN: dict[str, str] = {
         "Internet connection, then start again: once downloaded, the model stays local "
         "and the application no longer needs the network."
     ),
+    "err.modele.titre": "Transcription model unusable",
+    "err.modele.msg": (
+        "The model files are missing or damaged, and the folder could not be renewed "
+        "automatically. Close any other application that might be holding it, then "
+        "start the transcription again: the model will be downloaded afresh. The models "
+        "folder is shown in the settings, \"Models\" section."
+    ),
     "err.cuda.titre": "NVIDIA acceleration unavailable",
     "err.cuda.msg": (
         "The CUDA libraries (cuBLAS, cuDNN) could not be loaded. Run the installer "
@@ -935,6 +975,16 @@ _EN: dict[str, str] = {
     "moteur.premier_usage": (
         "First use of this model: about {taille} will be downloaded. This happens only "
         "once, after that everything stays on the machine."
+    ),
+    "moteur.modele_incomplet": (
+        "Model \"{modele}\" was incomplete, an earlier download had been interrupted. "
+        "It is being downloaded again now, about {taille}. Transcription will then "
+        "resume on its own."
+    ),
+    "moteur.modele_incomplet_bloque": (
+        "Model \"{modele}\" is incomplete and its folder could not be renewed. It may be "
+        "open in another program. Close the other applications and start again, or "
+        "delete \"{dossier}\"."
     ),
     "moteur.chargement": "Loading model {modele}...",
     "moteur.taille_inconnue": "a few hundred MB up to 3 GB",
@@ -1310,6 +1360,12 @@ _EN: dict[str, str] = {
         "Internet connection is needed for that step and for nothing else: after that the "
         "application runs entirely offline."
     ),
+    "app.telechargement_reparation": (
+        "Model \"{modele}\" is present but incomplete: an earlier download was "
+        "interrupted. It will be renewed automatically when the next transcription "
+        "starts, about {taille}, in \"{dossier}\". Nothing to do, an Internet connection "
+        "is all it takes."
+    ),
     "app.modeles.range": "Models will be stored in \"{dossier}\".",
     "app.modeles.ancien": (
         " The former folder \"{ancien}\" was left untouched, you can delete it if you no "
@@ -1375,9 +1431,19 @@ _EN: dict[str, str] = {
         "length of the download, after that the application works offline for good. If a "
         "lighter model is enough for you, the \"Fast\" preset needs 1.6 GB instead of 3.1 GB."
     ),
+    "app.modele.incomplet_hors_ligne": (
+        "The model on this machine is incomplete: the previous download was interrupted "
+        "before the end. It has to be picked up again, about {taille}, but no Internet "
+        "connection was found. Connect the machine for the duration of that download, "
+        "the application then takes care of it on its own."
+    ),
     "app.modele.premier_usage": (
         "First use of this model: about {taille} will be downloaded into \"{dossier}\". "
         "This happens only once, after that everything stays on the machine."
+    ),
+    "app.modele.incomplet": (
+        "The model on this machine is incomplete, an earlier download was interrupted. "
+        "It will be renewed automatically, about {taille} into \"{dossier}\"."
     ),
     "app.arret": "Stop requested, the running transcription will be interrupted.",
     "app.fichier_disparu": "This file no longer exists.",
