@@ -8,7 +8,7 @@ version : la chaîne de publication en extrait la section correspondant au tag.
 
 ## 2.3.0
 
-*Non publiée.*
+*Publiée le 19 août 2026.*
 
 La séparation des locuteurs s'installe d'un bouton. Elle était jusqu'ici
 réservée à la version source, ce qui revenait à demander à un utilisateur
