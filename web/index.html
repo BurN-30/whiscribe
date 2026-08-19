@@ -839,6 +839,24 @@
 
       <h3 data-i18n="ui.aide.h_probleme"></h3>
       <p data-i18n="ui.aide.p_probleme"></p>
+
+      <!-- Verification de mise a jour a la demande. Independante du reglage
+           d'opt-in, qui ne gouverne que la verification passive au demarrage :
+           ici c'est un clic volontaire, annonce comme tel juste en dessous. -->
+      <h3 data-i18n="ui.aide.h_maj"></h3>
+      <div class="aide-maj">
+        <span class="aide-maj-version">
+          <span data-i18n="ui.aide.maj_installee"></span>
+          <strong id="aide-maj-version"></strong>
+        </span>
+        <span class="pousse"></span>
+        <button class="bouton" id="btn-aide-maj">
+          <svg class="icone-s icone"><use href="#i-reprise"></use></svg>
+          <span id="btn-aide-maj-texte" data-i18n="ui.aide.maj_bouton"></span>
+        </button>
+      </div>
+      <div id="aide-maj-retour"></div>
+      <span class="aide" data-i18n="ui.aide.maj_confidentialite"></span>
     </div>
     <div class="modale-pied">
       <button class="bouton bouton-discret" id="btn-ouvrir-app" data-i18n="ui.aide.ouvrir_donnees"></button>

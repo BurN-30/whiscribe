@@ -508,6 +508,18 @@ fr: {
     + 'technique complet est écrit dans le fichier de journal, ouvrable depuis la barre du bas.',
   'ui.aide.ouvrir_donnees': 'Ouvrir le dossier de mes données',
 
+  /* -- vérification de mise à jour à la demande, dans l'aide -------------- */
+  'ui.aide.h_maj': 'Version et mises à jour',
+  'ui.aide.maj_installee': 'Version installée :',
+  'ui.aide.maj_bouton': 'Vérifier les mises à jour',
+  'ui.aide.maj_en_cours': 'Vérification en cours...',
+  'ui.aide.maj_a_jour': 'Vous avez la dernière version ({version}).',
+  'ui.aide.maj_echec': 'Vérification impossible, vérifiez votre connexion.',
+  'ui.aide.maj_indisponible': 'Vérification indisponible pour le moment.',
+  'ui.aide.maj_confidentialite': 'Ceci interroge GitHub une seule fois, à votre demande, et '
+    + "n'envoie rien d'autre. Le réglage « Vérifier les mises à jour » des paramètres ne "
+    + 'concerne, lui, que la vérification automatique au lancement.',
+
   /* -- boutons communs --------------------------------------------------- */
   'ui.bouton.annuler': 'Annuler',
   'ui.bouton.enregistrer': 'Enregistrer',
@@ -954,6 +966,16 @@ en: {
   'ui.aide.p_probleme': 'Every failure is explained in plain words in the queue, and the full '
     + 'technical details are written to the log file, which opens from the bottom bar.',
   'ui.aide.ouvrir_donnees': 'Open my data folder',
+
+  'ui.aide.h_maj': 'Version and updates',
+  'ui.aide.maj_installee': 'Installed version:',
+  'ui.aide.maj_bouton': 'Check for updates',
+  'ui.aide.maj_en_cours': 'Checking...',
+  'ui.aide.maj_a_jour': 'You are running the latest version ({version}).',
+  'ui.aide.maj_echec': 'Check failed, please verify your connection.',
+  'ui.aide.maj_indisponible': 'Check unavailable at the moment.',
+  'ui.aide.maj_confidentialite': 'This queries GitHub once, at your request, and sends nothing '
+    + 'else. The "Check for updates" setting only governs the automatic check at startup.',
 
   'ui.bouton.annuler': 'Cancel',
   'ui.bouton.enregistrer': 'Save',

@@ -18,6 +18,20 @@ le fonctionnement attendu, pas une panne. Ce cas, comme le 403 du quota, est
 journalisé en information et non en avertissement, pour ne pas faire lire une
 alerte à quelqu'un qui n'a rien à corriger.
 
+VÉRIFICATION DEMANDÉE À LA MAIN
+-------------------------------
+`verifier(forcer=True)` court-circuite la garde des 24 heures. C'est ce
+qu'appelle le bouton de la fenêtre d'aide : un clic explicite mérite une
+réponse immédiate, pas « repassez demain ». Le réglage d'opt-in, lui, ne
+gouverne que la vérification passive du démarrage, et cette distinction se
+tient dans `transcriber.pyw`, pas ici.
+
+Le jalon des 24 heures n'est posé **qu'après une interrogation réussie**. Un
+404, un poste hors ligne ou un pare-feu ne doivent jamais consommer la fenêtre
+du jour : sinon un seul essai malheureux, par exemple pendant la période où le
+dépôt était encore privé, condamnait le poste au silence pour 24 heures de
+plus, à chaque lancement.
+
 RÉINSTALLATION COMPLÈTE
 -----------------------
 Presque toutes les versions s'installent par-dessus la précédente sans rien
@@ -193,10 +207,12 @@ def analyser_release(publication: dict, version_courante: str = VERSION) -> dict
     version = etiquette.lstrip("vV")
     corps = str(publication.get("body") or "")
     if not version:
-        return {"disponible": False}
+        return {"disponible": False, "raison": "reponse-vide"}
 
+    plus_recente = comparer(version, version_courante) > 0
     return {
-        "disponible": comparer(version, version_courante) > 0,
+        "disponible": plus_recente,
+        "raison": "disponible" if plus_recente else "a-jour",
         "version": version,
         "url": str(publication.get("html_url") or ""),
         "reinstallation": MARQUEUR_REINSTALLATION.lower() in corps.lower(),
@@ -208,9 +224,15 @@ def verifier(version_courante: str = VERSION, forcer: bool = False) -> dict:
     """
     Regarde s'il existe une version plus récente. N'affiche jamais rien.
 
-    Ne doit être appelée que si l'utilisateur a activé le réglage. Renvoie
-    toujours un dictionnaire ; `{"disponible": False}` couvre aussi bien
-    « à jour » que « pas joignable ».
+    La vérification passive du démarrage ne doit être appelée que si
+    l'utilisateur a activé le réglage. `forcer=True` répond à un clic explicite
+    et ignore alors la garde des 24 heures.
+
+    Renvoie toujours un dictionnaire. `disponible` dit s'il y a quelque chose à
+    proposer, et `raison` dit pourquoi quand il n'y a rien : « a-jour »,
+    « indisponible » (dépôt privé ou quota), « reseau » (hors ligne, pare-feu,
+    panne), « verifiee-recemment ». Le bandeau ne lit que `disponible`, la
+    fenêtre d'aide lit les deux.
     """
     if not forcer and not verification_due():
         return {"disponible": False, "raison": "verifiee-recemment"}
@@ -218,9 +240,7 @@ def verifier(version_courante: str = VERSION, forcer: bool = False) -> dict:
     url = url_api()
     if not url:
         journal.attention("Vérification de mise à jour : adresse de dépôt inexploitable.")
-        return {"disponible": False}
-
-    _ecrire_etat({**lire_etat(), "derniere": datetime.now().isoformat(timespec="seconds")})
+        return {"disponible": False, "raison": "indisponible"}
 
     try:
         publication = _interroger(url)
@@ -234,14 +254,18 @@ def verifier(version_courante: str = VERSION, forcer: bool = False) -> dict:
             journal.info(
                 "Vérification de mise à jour indisponible (HTTP %s), sans conséquence.",
                 exc.code)
-        else:
-            journal.attention("Vérification de mise à jour sans réponse : %s", exc)
-        return {"disponible": False}
+            return {"disponible": False, "raison": "indisponible"}
+        journal.attention("Vérification de mise à jour sans réponse : %s", exc)
+        return {"disponible": False, "raison": "reseau"}
     except (urllib.error.URLError, OSError, TimeoutError, ValueError) as exc:
         # Hors ligne, pare-feu, GitHub en panne, réponse illisible : rien à
-        # l'écran, une ligne de journal, et on réessaiera demain.
+        # l'écran, une ligne de journal, et on réessaiera au prochain lancement.
         journal.attention("Vérification de mise à jour sans réponse : %s", exc)
-        return {"disponible": False}
+        return {"disponible": False, "raison": "reseau"}
+
+    # Jalon posé ici, et nulle part ailleurs : GitHub a répondu, la fenêtre du
+    # jour est bien consommée. Un échec, lui, laisse la place au prochain essai.
+    _ecrire_etat({**lire_etat(), "derniere": datetime.now().isoformat(timespec="seconds")})
 
     resultat = analyser_release(publication, version_courante)
     if resultat.get("disponible"):

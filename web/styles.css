@@ -531,28 +531,37 @@ textarea { resize: vertical; font-family: var(--police-mono); font-size: 12.5px;
   position: fixed; inset: 0; z-index: 50;
   background: rgba(10, 13, 18, .55);
   display: none; align-items: center; justify-content: center;
-  padding: 24px;
+  padding: 32px 24px;
 }
 .voile.ouvert { display: flex; }
 
+/* Une modale reste une fenetre posee sur l'application, jamais un plein ecran :
+   elle garde une marge visible en haut et en bas, quelle que soit la longueur
+   de son contenu. C'est le corps qui defile, l'entete et le pied ne bougent
+   pas. Regle portee ici, par la classe commune, pour que toutes s'y tiennent. */
 .modale {
   background: var(--carte);
   border: 1px solid var(--bordure);
   border-radius: 14px;
   box-shadow: var(--ombre-forte);
   width: 100%; max-width: 620px;
-  max-height: 88vh;
+  max-height: 85vh;
   display: flex; flex-direction: column;
+  overflow: hidden;              /* les coins arrondis rognent le defilement */
 }
 .modale-large { max-width: 780px; }
 .modale-entete {
   display: flex; align-items: center; gap: 10px;
+  flex: none;
   padding: 16px 20px; border-bottom: 1px solid var(--bordure);
 }
 .modale-entete h2 { font-size: 15px; font-weight: 650; flex: 1; }
-.modale-corps { padding: 18px 20px; overflow-y: auto; }
+/* min-height a 0 : sans lui, un corps trop long deborde la modale au lieu de
+   defiler dedans, et l'entete comme le pied sortent du cadre. */
+.modale-corps { padding: 18px 20px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 .modale-pied {
   display: flex; align-items: center; gap: 10px;
+  flex: none;
   padding: 14px 20px; border-top: 1px solid var(--bordure);
 }
 .modale-corps p { font-size: 13px; color: var(--texte-doux); margin-bottom: 10px; }
@@ -566,6 +575,23 @@ textarea { resize: vertical; font-family: var(--police-mono); font-size: 12.5px;
   padding: 1px 6px; border-radius: 4px;
 }
 .modale-corps textarea { min-height: 260px; }
+.modale-corps > .aide {
+  display: block; font-size: 11.5px; color: var(--texte-faible); margin-top: 8px;
+}
+
+/* Verification de mise a jour a la demande, dans la fenetre d'aide. Toutes les
+   couleurs viennent des variables : le bloc suit le theme clair comme sombre. */
+.aide-maj {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--carte-creuse); border: 1px solid var(--bordure);
+  border-radius: var(--rayon-petit); padding: 12px 14px;
+}
+.aide-maj-version { font-size: 13px; color: var(--texte-doux); }
+.aide-maj-version strong { color: var(--texte); font-weight: 650; }
+#aide-maj-retour:not(:empty) { margin-top: 10px; }
+#aide-maj-retour .encart { margin-bottom: 0; }
+#aide-maj-retour .bouton { margin-top: 10px; }
+
 .apercu {
   font-family: var(--police-mono); font-size: 12px; line-height: 1.75;
   white-space: pre-wrap; word-break: break-word; user-select: text;
@@ -601,7 +627,9 @@ textarea { resize: vertical; font-family: var(--police-mono); font-size: 12.5px;
 
 /* --------------------------------------------------------- Vue de lecture */
 
-.modale-lecture { max-width: 900px; max-height: 92vh; }
+/* La vue de lecture est la plus large et la plus haute des modales, parce
+   qu'on y lit un texte long, mais elle reste bornee comme les autres. */
+.modale-lecture { max-width: 900px; max-height: 88vh; }
 
 .lecture-meta {
   display: flex; flex-wrap: wrap; gap: 6px 16px;

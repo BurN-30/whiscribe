@@ -27,6 +27,8 @@ const etat = {
   selection: '',          // expression selectionnee, en attente de correction
   surveillance: { actif: false, dossier: '', probleme: '' },
   maj: null,              // version plus recente annoncee par le bandeau
+  version: '',            // version installee, affichee dans l'aide
+  majEnCours: false,      // verification demandee a la main, en vol
   pret: false,
 };
 
@@ -70,7 +72,9 @@ function initialiser(d, silencieux) {
   if (etat.config.langue_interface) definirLangue(etat.config.langue_interface);
   traduirePage();
 
+  etat.version = String(d.version || '');
   $('#version').textContent = 'v' + d.version;
+  $('#aide-maj-version').textContent = etat.version;
   appliquerTheme(etat.config.theme || 'auto');
   appliquerZoom(etat.config.zoom || 1);
 
@@ -681,6 +685,65 @@ function onMiseAJour(info) {
   journaliser('info', t('ui.maj.journal', { version: info.version }));
 }
 window.onMiseAJour = onMiseAJour;
+
+/* Verification demandee a la main depuis la fenetre d'aide.
+
+   Elle ne passe pas par le reglage d'opt-in : celui-ci ne gouverne que la
+   verification passive du demarrage, alors qu'ici l'utilisateur clique. Elle
+   ignore aussi la garde des 24 heures, cote Python. Le texte des resultats est
+   partage avec le bandeau : aucune formulation n'est ecrite deux fois. */
+
+function ouvrirAide() {
+  $('#aide-maj-version').textContent = etat.version;
+  if (!etat.majEnCours) $('#aide-maj-retour').innerHTML = '';
+  ouvrirModale('#modale-aide');
+}
+
+async function verifierMajDepuisAide() {
+  if (etat.majEnCours) return;
+  etat.majEnCours = true;
+
+  const bouton = $('#btn-aide-maj');
+  const retour = $('#aide-maj-retour');
+  bouton.disabled = true;
+  $('#btn-aide-maj-texte').textContent = t('ui.aide.maj_en_cours');
+  retour.innerHTML = '';
+
+  let r = null;
+  try {
+    r = await pywebview.api.verifier_maj_manuel();
+  } catch (e) {
+    console.error(e);
+  }
+
+  if (r && r.version_installee) {
+    etat.version = String(r.version_installee);
+    $('#aide-maj-version').textContent = etat.version;
+  }
+
+  if (!r) {
+    retour.innerHTML = encartAttention(t('ui.aide.maj_echec'));
+  } else if (r.disponible) {
+    retour.innerHTML = encartInfo(t(
+      r.reinstallation ? 'ui.maj.reinstallation' : 'ui.maj.par_dessus',
+      { version: r.version },
+    )) + `<button class="bouton bouton-accent" id="btn-aide-maj-page">
+        ${icone('i-externe', 'icone-s')}<span>${ech(t('ui.maj.voir'))}</span>
+      </button>`;
+    const lien = $('#btn-aide-maj-page');
+    if (lien) lien.onclick = () => { if (r.url) pywebview.api.ouvrir_lien(r.url); };
+  } else if (r.raison === 'indisponible') {
+    retour.innerHTML = encartInfo(t('ui.aide.maj_indisponible'));
+  } else if (r.raison === 'reseau') {
+    retour.innerHTML = encartAttention(t('ui.aide.maj_echec'));
+  } else {
+    retour.innerHTML = encartSucces(t('ui.aide.maj_a_jour', { version: etat.version }));
+  }
+
+  $('#btn-aide-maj-texte').textContent = t('ui.aide.maj_bouton');
+  bouton.disabled = false;
+  etat.majEnCours = false;
+}
 
 /* ------------------------------------------- Import et export des donnees */
 
@@ -1441,7 +1504,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   $('#btn-theme').addEventListener('click', themeSuivant);
-  $('#btn-aide').addEventListener('click', () => ouvrirModale('#modale-aide'));
+  $('#btn-aide').addEventListener('click', ouvrirAide);
+  $('#btn-aide-maj').addEventListener('click', verifierMajDepuisAide);
   $('#btn-ouvrir-app').addEventListener('click', () => pywebview.api.ouvrir_dossier_application());
 
   // Depot de fichiers. Le chemin reel est recupere cote Python : un navigateur

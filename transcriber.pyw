@@ -673,6 +673,31 @@ class Passerelle:
 
         self._fond(travail)
 
+    def verifier_maj_manuel(self) -> dict:
+        """
+        Vérification demandée à la main depuis la fenêtre d'aide.
+
+        Deux différences avec `verifier_maj`, toutes deux voulues :
+
+        - elle ne consulte **pas** le réglage d'opt-in. Celui-ci ne gouverne que
+          la vérification passive du démarrage ; ici l'utilisateur clique, il
+          demande donc explicitement cet unique appel à GitHub, et la fenêtre
+          d'aide le lui dit noir sur blanc juste sous le bouton ;
+        - elle ignore la garde des 24 heures (`forcer=True`), sans quoi un clic
+          répondrait « repassez demain », ce qui n'aurait aucun sens.
+
+        Elle renvoie son résultat directement, l'interface l'attend. Si une
+        version plus récente sort de là, le bandeau du haut est levé au passage.
+        """
+        try:
+            resultat = maj.verifier(VERSION, forcer=True)
+        except Exception as exc:
+            journal.exception("Vérification de mise à jour en échec", exc)
+            resultat = {"disponible": False, "raison": "reseau"}
+        if resultat.get("disponible"):
+            self._js(f"onMiseAJour({_json(resultat)})")
+        return {**resultat, "version_installee": VERSION}
+
     # -- réglages ----------------------------------------------------------
 
     def sauver_config(self, partiel: dict) -> dict:

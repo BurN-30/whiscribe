@@ -6,6 +6,44 @@ version : la chaîne de publication en extrait la section correspondant au tag.
 
 ---
 
+## 2.3.2
+
+*Publiée le 20 août 2026.*
+
+Les mises à jour se vérifient d'un clic, sans attendre le lendemain.
+
+La vérification n'existait qu'au lancement, à condition d'avoir activé le
+réglage, et une seule fois par 24 heures : trois conditions à réunir pour
+voir passer un bandeau qu'on rate de toute façon si on regarde ailleurs.
+Savoir si une nouvelle version existe ne devrait pas demander de relancer
+l'application.
+
+- **La fenêtre d'aide**, ouverte par le point d'interrogation en haut à
+  droite, se termine désormais par une section « Version et mises à jour ».
+  Elle affiche la version installée et porte un bouton « Vérifier les mises à
+  jour » qui interroge GitHub tout de suite. Pendant l'appel, le bouton passe
+  à « Vérification en cours... » et se désactive.
+- **La réponse s'affiche là, dans la fenêtre** : « Vous avez la dernière
+  version », ou l'annonce de la version disponible avec un bouton qui ouvre la
+  page de la publication dans le navigateur. Le cas rare des versions qui
+  demandent une réinstallation est annoncé comme dans le bandeau, avec les
+  mêmes mots. Hors ligne, le message reste « Vérification impossible, vérifiez
+  votre connexion. », jamais un message technique.
+- **Ce bouton ne dépend pas du réglage** de vérification automatique : c'est un
+  clic volontaire, il vaut consentement pour cet appel unique, et un libellé le
+  dit sous le bouton. Le réglage, lui, continue de ne gouverner que la
+  vérification silencieuse au lancement, coupée par défaut.
+- **Le bandeau du démarrage est réparé.** L'horodatage de la dernière
+  vérification était écrit avant l'appel, donc même quand celui-ci échouait.
+  Un poste qui avait essayé pendant que le dépôt était encore privé, et
+  recevait un 404, se retrouvait bloqué pour 24 heures de plus à chaque
+  lancement, sans jamais retenter. Désormais seule une réponse effectivement
+  reçue de GitHub consomme la fenêtre du jour.
+- **Les fenêtres se tiennent mieux.** La fenêtre d'aide s'étirait du haut au bas
+  de l'écran, sans respiration. Toutes les modales gardent maintenant une marge
+  franche en haut comme en bas, leur en-tête et leur pied restent en place, et
+  c'est le contenu qui défile entre les deux.
+
 ## 2.3.1
 
 *Publiée le 19 août 2026.*

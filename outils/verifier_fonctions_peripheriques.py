@@ -12,7 +12,10 @@ ce soit et **sans le moindre appel réseau** :
      au défaut, non-régression du nom historique ;
   4. la mesure de l'espace occupé, sur une arborescence fabriquée pour
      l'occasion ;
-  5. la garde des 24 heures entre deux vérifications de mise à jour ;
+  5. la garde des 24 heures entre deux vérifications de mise à jour : le jalon
+     n'est posé qu'après une réponse effectivement reçue, un échec laisse la
+     fenêtre du jour intacte, et `forcer=True`, ce qu'emploie le bouton de la
+     fenêtre d'aide, passe outre la garde ;
   6. la plomberie COM en ctypes pur de la barre des tâches Windows, jusqu'à
      l'initialisation de l'objet ;
   7. l'amorce du glossaire, dont l'en-tête suit la langue parlée et non celle
@@ -186,6 +189,11 @@ def essai_versions() -> None:
         ("2.2.0-beta.1", "2.2.0", -1, "une préversion précède la version finale"),
         ("2.2.0", "2.2.0-rc.2", 1, "la version finale suit sa préversion"),
         ("2.2.0-rc.2", "2.2.0-rc.10", -1, "préversions comparées en nombres"),
+        ("2.3.2", "2.3.1", 1, "le correctif suivant est bien vu plus récent"),
+        ("2.3.1", "2.3.2", -1, "et le précédent plus ancien"),
+        ("2.3.10", "2.3.9", 1, "2.3.10 est plus récent que 2.3.9, pas l'inverse"),
+        ("2.3.9", "2.3.10", -1, "2.3.9 est plus ancien que 2.3.10"),
+        ("2.3.2", "2.3.2", 0, "égalité stricte sur la version du jour"),
         ("2.2", "2.2.0", 0, "un numéro court vaut le même complété de zéros"),
         ("2.2.0", "", 1, "une version absente en face ne bloque pas"),
     ]
@@ -379,6 +387,7 @@ def essai_cadence_maj() -> None:
         verifier(maj.verification_due(), "un état illisible ne bloque pas la vérification")
 
         essai_maj_indisponible()
+        essai_maj_jalon(fichier)
     finally:
         if existait:
             fichier.write_text(sauvegarde, encoding="utf-8")
@@ -429,6 +438,108 @@ def essai_maj_indisponible() -> None:
         maj.verifier("2.0.0", forcer=True)
         verifier(bool(traces["attention"]),
                  "une vraie panne de GitHub reste un avertissement")
+    finally:
+        maj._interroger = interrogation
+        journal.info, journal.attention = ecrire_info, ecrire_attention
+
+
+def essai_maj_jalon(fichier: Path) -> None:
+    """
+    Deux règles que la version 2.3.2 fixe, et qu'aucun appel réseau ne vient
+    éprouver ici : l'interrogation est remplacée par ce qu'elle produirait.
+
+    1. **Seul un succès pose le jalon des 24 heures.** Un 404, un poste hors
+       ligne ou un pare-feu laissent la fenêtre du jour intacte. Sans cette
+       règle, un unique essai malheureux, par exemple pendant la période où le
+       dépôt était encore privé, condamnait le poste au silence à chaque
+       lancement des 24 heures suivantes.
+    2. **`forcer=True` ignore le cache**, sans quoi le bouton de la fenêtre
+       d'aide répondrait « repassez demain » à un clic explicite.
+    """
+    import urllib.error
+
+    from app import journal
+
+    interrogation = maj._interroger
+    ecrire_info, ecrire_attention = journal.info, journal.attention
+    appels: list[str] = []
+
+    publication = {
+        "tag_name": "v9.9.9",
+        "html_url": "https://exemple.invalide/releases/tag/v9.9.9",
+        "body": "Sans marqueur.",
+    }
+
+    def repondre(_url: str) -> dict:
+        appels.append(_url)
+        return dict(publication)
+
+    def lever(exception: Exception):
+        def echouer(_url: str) -> dict:
+            appels.append(_url)
+            raise exception
+        return echouer
+
+    try:
+        journal.info = lambda message, *args: None
+        journal.attention = lambda message, *args: None
+
+        # 1. Un échec ne consomme pas la fenêtre du jour.
+        pannes = [
+            (urllib.error.HTTPError(  # type: ignore[arg-type]
+                "https://exemple.invalide", 404, "Not Found", {}, None),
+             "un 404 ne pose pas le jalon des 24 heures"),
+            (urllib.error.URLError("poste hors ligne"),
+             "un poste hors ligne ne pose pas le jalon des 24 heures"),
+            (TimeoutError("pare-feu"),
+             "un délai dépassé ne pose pas le jalon des 24 heures"),
+        ]
+        for exception, libelle in pannes:
+            fichier.unlink(missing_ok=True)
+            maj._interroger = lever(exception)
+            resultat = maj.verifier("2.0.0")
+            verifier(not resultat.get("disponible"), f"{libelle} : rien n'est proposé")
+            verifier("derniere" not in maj.lire_etat(), libelle, str(maj.lire_etat()))
+            verifier(maj.verification_due(),
+                     f"{libelle}, la vérification suivante reste due")
+
+        # 2. Un succès, lui, le pose.
+        fichier.unlink(missing_ok=True)
+        maj._interroger = repondre
+        resultat = maj.verifier("2.0.0")
+        verifier(resultat.get("disponible") is True,
+                 "une réponse valide annonce bien la version plus récente")
+        verifier("derniere" in maj.lire_etat(),
+                 "seul un succès pose le jalon des 24 heures")
+        verifier(not maj.verification_due(),
+                 "juste après un succès, la vérification n'est plus due")
+
+        # 3. Le démarrage respecte le cache, le bouton l'ignore.
+        appels.clear()
+        passif = maj.verifier("2.0.0")
+        verifier(passif.get("raison") == "verifiee-recemment",
+                 "la vérification du démarrage respecte le cache de 24 heures", str(passif))
+        verifier(not appels, "et n'émet aucun appel réseau", str(appels))
+
+        appels.clear()
+        force = maj.verifier("2.0.0", forcer=True)
+        verifier(bool(appels), "forcer=True interroge malgré le cache")
+        verifier(force.get("disponible") is True and force.get("version") == "9.9.9",
+                 "forcer=True rend un résultat complet", str(force))
+
+        # 4. La raison distingue « à jour » de « pas joignable » : la fenêtre
+        #    d'aide s'en sert pour ne pas dire « à jour » à un poste hors ligne.
+        a_jour = maj.verifier("9.9.9", forcer=True)
+        verifier(a_jour.get("raison") == "a-jour" and not a_jour.get("disponible"),
+                 "une version déjà à jour se distingue d'un échec", str(a_jour))
+        maj._interroger = lever(urllib.error.URLError("hors ligne"))
+        panne = maj.verifier("2.0.0", forcer=True)
+        verifier(panne.get("raison") == "reseau", "un échec réseau se nomme", str(panne))
+        maj._interroger = lever(urllib.error.HTTPError(  # type: ignore[arg-type]
+            "https://exemple.invalide", 404, "Not Found", {}, None))
+        prive = maj.verifier("2.0.0", forcer=True)
+        verifier(prive.get("raison") == "indisponible",
+                 "un dépôt injoignable se nomme autrement", str(prive))
     finally:
         maj._interroger = interrogation
         journal.info, journal.attention = ecrire_info, ecrire_attention
