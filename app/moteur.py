@@ -11,14 +11,30 @@ séquencement qui permet de faire tenir large-v3 plus pyannote dans 16 Go.
 
 TÉLÉCHARGEMENT ET REPRISE
 -------------------------
-Le téléchargement des poids est celui de faster-whisper, qui appelle
-`huggingface_hub.snapshot_download`. Depuis huggingface_hub 0.23, la reprise
-d'un téléchargement coupé est le comportement d'origine, `resume_download` n'a
-plus à être passé et ne l'est nulle part ici : chaque fichier est reçu sous un
-nom « .incomplete » puis renommé une fois complet. C'est en revanche muet sur
-le cas qui nous occupe, un dossier de modèle laissé sans ses poids : le dépôt
-est alors vu comme présent en cache et le chargement échoue. La garde ci-dessous
-(`etat_modele`, `reparer_modele`) traite ce cas au lancement suivant.
+Les poids ne sont plus descendus par faster-whisper, mais par cet
+module (`assurer_modele_telecharge`), pour trois raisons.
+
+1. `huggingface_hub.snapshot_download` SE REPLIE EN SILENCE sur le cache quand
+   le dépôt est injoignable : la panne réseau est avalée dans un `except`
+   (`_snapshot_download.py`, lignes 264 à 290 de la version 1.27), puis le
+   dossier déjà présent est rendu tel quel, poids manquants compris (lignes 301
+   à 331). faster-whisper reçoit alors un chemin valide et CTranslate2 échoue à
+   l'ouverture sur « Unable to open file 'model.bin' ». Le message parle d'un
+   fichier, alors que la vraie cause est un téléchargement qui n'a pas abouti.
+   On appelle donc le hub nous-mêmes et l'on RECONTRÔLE les poids après coup :
+   sans « model.bin » de taille plausible, rien n'est instancié et l'incident
+   est formulé en français.
+2. La reprise est le comportement d'origine du hub depuis la 0.23 : chaque
+   fichier est reçu sous un nom « .incomplete » puis renommé une fois complet.
+   Encore faut-il ne pas effacer le dossier avant de retélécharger, ce que
+   faisait la 2.3.1 : un échec à 80 % d'un fichier de 3 Go repartait de zéro.
+   Un dossier incomplet est désormais COMPLÉTÉ, jamais vidé ; seule la panne
+   inexpliquée (poids que faster-whisper refuse alors qu'ils paraissent sains)
+   déclenche encore un effacement, une fois et une seule.
+3. Un modèle déjà complet est instancié PAR SON DOSSIER (`chemin_instanciation`),
+   ce qui fait prendre à faster-whisper la branche « dossier local » et ne
+   produit aucun appel réseau. C'est la promesse du hors-ligne, tenue par
+   construction et non par le repli d'une bibliothèque tierce.
 """
 
 from __future__ import annotations
@@ -115,6 +131,27 @@ PREFIXE_CACHE = "models--"
 #: Suffixe posé par huggingface_hub sur un fichier en cours de réception.
 SUFFIXE_INCOMPLET = ".incomplete"
 
+#: Fichiers réclamés au dépôt. Même liste que `faster_whisper.utils.download_model`,
+#: recopiée parce qu'elle y est une variable locale : c'est le prix à payer pour
+#: appeler le hub nous-mêmes plutôt que de subir son repli silencieux.
+MOTIFS_FICHIERS = (
+    "config.json",
+    "preprocessor_config.json",
+    "model.bin",
+    "tokenizer.json",
+    "vocabulary.*",
+)
+
+#: Marge appliquée au poids annoncé du modèle pour juger l'espace disque. Le
+#: fichier est écrit deux fois pendant sa réception (« .incomplete » puis blob),
+#: et il faut de quoi respirer ensuite : 30 % de plus que le poids annoncé.
+MARGE_DISQUE = 1.3
+
+#: Poids retenu quand le modèle demandé n'est pas au catalogue. C'est celui du
+#: plus lourd des modèles publiés : mieux vaut annoncer une exigence un peu haute
+#: que laisser un disque se remplir à 99 % au milieu d'un téléchargement.
+POIDS_INCONNU = int(3.1 * 1024 ** 3)
+
 
 def _racine_modeles(racine: str | Path | None = None) -> Path:
     return Path(str(racine)) if racine else Path(chemins.DOSSIER_MODELES)
@@ -156,11 +193,18 @@ def _analyser_snapshot(snapshot: Path) -> tuple[str, str]:
     return "complet", ""
 
 
-def _analyser_cache(dossier: Path) -> tuple[str, str]:
-    """(état, motif) pour un dossier de cache huggingface déjà présent."""
+def _analyser_cache(dossier: Path) -> tuple[str, str, Path | None, bool]:
+    """
+    (état, motif, instantané complet, réception en cours) pour un dossier de cache.
+
+    L'instantané n'est renvoyé que s'il est utilisable : c'est lui qu'on passera
+    à faster-whisper pour lui éviter tout appel réseau. « Réception en cours »
+    signale des fichiers « .incomplete », donc un téléchargement à REPRENDRE et
+    surtout pas un dossier à effacer.
+    """
     en_cours = _fichiers_en_cours(dossier)
     if en_cours:
-        return "incomplet", f"{en_cours} fichier(s) encore en cours de réception"
+        return "incomplet", f"{en_cours} fichier(s) encore en cours de réception", None, True
 
     snapshots = dossier / "snapshots"
     try:
@@ -168,15 +212,15 @@ def _analyser_cache(dossier: Path) -> tuple[str, str]:
     except OSError:
         candidats = []
     if not candidats:
-        return "incomplet", "aucun instantané téléchargé"
+        return "incomplet", "aucun instantané téléchargé", None, False
 
     motifs: list[str] = []
     for snapshot in candidats:
         etat, motif = _analyser_snapshot(snapshot)
         if etat == "complet":
-            return "complet", ""
+            return "complet", "", snapshot, False
         motifs.append(motif)
-    return "incomplet", " ; ".join(motifs)
+    return "incomplet", " ; ".join(motifs), None, False
 
 
 def _snapshot_resolu(modele: str) -> Path | None:
@@ -229,16 +273,21 @@ def etat_modele(modele: str, racine: str | Path | None = None) -> dict:
     fourni = Path(str(modele or ""))
     if fourni.is_dir():
         etat, motif = _analyser_snapshot(fourni)
-        return {"etat": etat, "dossier": str(fourni), "motif": motif, "reparable": False}
+        return {
+            "etat": etat, "dossier": str(fourni), "motif": motif, "reparable": False,
+            "snapshot": str(fourni) if etat == "complet" else "", "reception_en_cours": False,
+        }
 
     dossier = dossier_cache_modele(modele, racine)
     if dossier.is_dir():
-        etat, motif = _analyser_cache(dossier)
+        etat, motif, snapshot, en_cours = _analyser_cache(dossier)
         return {
             "etat": etat,
             "dossier": str(dossier),
             "motif": motif,
             "reparable": etat == "incomplet" and modele_supprimable(modele, racine),
+            "snapshot": str(snapshot) if snapshot else "",
+            "reception_en_cours": en_cours,
         }
 
     # Le dossier n'est pas là où on l'attend : plutôt que de conclure trop vite
@@ -248,9 +297,15 @@ def etat_modele(modele: str, racine: str | Path | None = None) -> dict:
     resolu = _snapshot_resolu(modele) if racine is None else None
     if resolu is not None and resolu.is_dir():
         etat, motif = _analyser_snapshot(resolu)
-        return {"etat": etat, "dossier": str(resolu), "motif": motif, "reparable": False}
+        return {
+            "etat": etat, "dossier": str(resolu), "motif": motif, "reparable": False,
+            "snapshot": str(resolu) if etat == "complet" else "", "reception_en_cours": False,
+        }
 
-    return {"etat": "absent", "dossier": str(dossier), "motif": "", "reparable": False}
+    return {
+        "etat": "absent", "dossier": str(dossier), "motif": "", "reparable": False,
+        "snapshot": "", "reception_en_cours": False,
+    }
 
 
 def modele_deja_telecharge(modele: str) -> bool:
@@ -318,10 +373,13 @@ def supprimer_modele(modele: str, racine: str | Path | None = None) -> bool:
 def reparer_modele(modele: str, etat: dict | None = None,
                    signaler: Callable[[str, str], None] | None = None) -> bool:
     """
-    Efface un modèle incomplet pour que le téléchargement reparte de zéro.
+    Efface un modèle pour que le téléchargement reparte de zéro.
 
-    Le retéléchargement lui-même est fait par faster-whisper juste après, avec
-    les mêmes messages que le premier usage : il n'y a rien à dupliquer ici.
+    Dernier recours, appelé par le seul filet de sécurité : des poids que la
+    vérification tient pour sains mais que CTranslate2 refuse d'ouvrir. Le cas
+    ordinaire d'un dossier incomplet ne passe plus par ici, il est COMPLÉTÉ par
+    `assurer_modele_telecharge`, ce qui préserve la reprise du téléchargement.
+    Le retéléchargement lui-même suit immédiatement, côté appelant.
     """
     etat = etat or etat_modele(modele)
     journal.attention(
@@ -347,6 +405,197 @@ def _poids_illisible(exc: BaseException) -> bool:
     return NOM_POIDS in texte or "unable to open file" in texte
 
 
+# ---------------------------------------------------------------------------
+# Téléchargement des poids, mené par l'application
+#
+# Tout ce qui suit ne s'exécute QUE si le modèle demandé n'est pas déjà complet
+# sur le disque. Un poste hors ligne dont le modèle est en place ne touche aucune
+# de ces fonctions, pas même le test de connexion.
+# ---------------------------------------------------------------------------
+
+class EchecTelechargement(ErreurLisible):
+    """
+    Les poids n'ont pas pu être descendus, et l'on sait dire pourquoi.
+
+    Sous-classe d'`ErreurLisible` : `journal.expliquer` la laisse passer telle
+    quelle, l'utilisateur voit donc la phrase écrite ici et jamais un traceback.
+    """
+
+
+def poids_attendu_octets(modele: str) -> int:
+    """Poids annoncé du modèle, en octets. Sert à juger l'espace disque libre."""
+    for avance in presets.MODELES_AVANCES:
+        if modele in (avance["cle"], avance["nom"]):
+            return int(avance["octets"])
+    for p in presets.PRESETS.values():
+        if p["modele"] == modele:
+            return int(p["telechargement_go"] * 1024 ** 3)
+    return POIDS_INCONNU
+
+
+def espace_libre_octets(dossier: str | Path) -> int:
+    """
+    Espace libre sur le volume du dossier, -1 s'il est indéterminable.
+
+    Le dossier des modèles peut ne pas encore exister : on remonte alors aux
+    parents, le volume est le même.
+    """
+    cible = Path(str(dossier)).expanduser()
+    for candidat in [cible, *cible.parents]:
+        if candidat.exists():
+            try:
+                return shutil.disk_usage(str(candidat)).free
+            except OSError:
+                return -1
+    return -1
+
+
+def _manque_de_place(exc: BaseException) -> bool:
+    """L'exception trahit-elle un disque plein plutôt qu'un incident réseau ?"""
+    if isinstance(exc, OSError) and getattr(exc, "errno", None) == 28:
+        return True
+    texte = f"{type(exc).__name__}: {exc}".lower()
+    return any(motif in texte for motif in (
+        "no space left", "espace insuffisant", "not enough space", "disk full",
+    ))
+
+
+def _echouer(signaler, titre: str, message: str, cause: BaseException | None = None):
+    """Journalise, prévient l'interface, puis lève. Un seul endroit pour les trois."""
+    journal.erreur("%s : %s", titre, message)
+    if signaler:
+        signaler("erreur", message)
+    raise EchecTelechargement(titre, message, cause)
+
+
+def _telecharger(modele: str) -> str:
+    """
+    Descend les poids depuis Hugging Face, sans repli et sans filet.
+
+    Appel direct à `snapshot_download`, avec `local_files_only=False` : ce que la
+    bibliothèque avale plus loin (voir l'en-tête du module), on le laisse ici
+    remonter, pour pouvoir le nommer. La reprise d'un fichier coupé est acquise :
+    `hf_hub_download` retrouve le « .incomplete » déjà sur le disque et repart de
+    l'octet atteint. C'est aussi la raison pour laquelle on n'efface plus le
+    dossier avant de retélécharger.
+    """
+    from huggingface_hub import snapshot_download
+
+    depot = identifiant_depot(modele)
+    chemins.confiner_cache_huggingface()
+    journal.info("Téléchargement du modèle %s depuis le dépôt %s", nom_court(modele), depot)
+    with journal.SortieMuette("téléchargement du modèle"):
+        return snapshot_download(
+            depot,
+            cache_dir=str(chemins.DOSSIER_MODELES),
+            allow_patterns=list(MOTIFS_FICHIERS),
+            local_files_only=False,
+        )
+
+
+def assurer_modele_telecharge(modele: str, etat: dict | None = None,
+                              signaler: Callable[[str, str], None] | None = None,
+                              annoncer: bool = True) -> dict:
+    """
+    Garantit que les poids sont là AVANT toute instanciation.
+
+    Renvoie l'état du modèle, forcément « complet ». Lève un `EchecTelechargement`
+    dans tous les autres cas, avec la cause quand elle est identifiable : espace
+    disque insuffisant, dépôt injoignable, ou téléchargement qui rend un dossier
+    sans « model.bin ». Aucune boucle : un seul téléchargement par appel.
+
+    `annoncer` à faux tait la phrase d'attente : le filet de sécurité vient de
+    dire à l'utilisateur que le modèle est renouvelé, inutile de le répéter.
+    """
+    etat = etat or etat_modele(modele)
+    if etat["etat"] == "complet":
+        return etat
+
+    # Dossier de modèle désigné à la main par l'utilisateur : il n'y a pas de
+    # dépôt à interroger, on ne peut que dire ce qui manque.
+    if Path(str(modele or "")).is_dir():
+        _echouer(signaler, langues.t("err.modele.titre"), langues.t("err.modele.msg"))
+
+    racine = Path(chemins.DOSSIER_MODELES)
+    requis = int(poids_attendu_octets(modele) * MARGE_DISQUE)
+    libre = espace_libre_octets(racine)
+    if 0 <= libre < requis:
+        _echouer(signaler, langues.t("err.disque.titre"), langues.t(
+            "moteur.disque_insuffisant",
+            modele=nom_court(modele), requis=langues.octets(requis),
+            libre=langues.octets(libre), dossier=str(racine)))
+
+    if signaler and annoncer:
+        if etat["etat"] == "absent":
+            signaler("attention", langues.t(
+                "moteur.premier_usage", taille=taille_annoncee(modele)))
+        elif etat.get("reception_en_cours"):
+            signaler("attention", langues.t(
+                "moteur.telechargement_reprend",
+                modele=nom_court(modele), taille=taille_annoncee(modele)))
+        else:
+            signaler("attention", langues.t(
+                "moteur.modele_incomplet",
+                modele=nom_court(modele), taille=taille_annoncee(modele)))
+    if etat["etat"] == "incomplet":
+        journal.attention(
+            "Modèle %s incomplet (%s), complété par téléchargement : %s",
+            nom_court(modele), etat.get("motif") or "cause non identifiée",
+            etat.get("dossier"))
+
+    if not connexion_disponible():
+        _echouer(signaler, langues.t("err.reseau.titre"), langues.t(
+            "moteur.reseau_indisponible",
+            modele=nom_court(modele), taille=taille_annoncee(modele)))
+
+    try:
+        _telecharger(modele)
+    except Exception as exc:
+        journal.exception(f"Téléchargement du modèle {modele} impossible", exc)
+        if _manque_de_place(exc):
+            _echouer(signaler, langues.t("err.disque.titre"), langues.t(
+                "moteur.disque_insuffisant",
+                modele=nom_court(modele), requis=langues.octets(requis),
+                libre=langues.octets(max(0, espace_libre_octets(racine))),
+                dossier=str(racine)), exc)
+        _echouer(signaler, langues.t("moteur.telechargement_echoue.titre"), langues.t(
+            "moteur.telechargement_echoue.msg",
+            modele=nom_court(modele), taille=taille_annoncee(modele),
+            requis=langues.octets(requis)), exc)
+
+    # Le hub a rendu la main sans se plaindre : cela ne prouve rien. Tant que
+    # « model.bin » n'est pas là et de taille plausible, on n'instancie pas.
+    apres = etat_modele(modele)
+    if apres["etat"] != "complet":
+        journal.attention(
+            "Téléchargement terminé mais modèle toujours incomplet (%s)",
+            apres.get("motif") or "cause non identifiée")
+        _echouer(signaler, langues.t("moteur.telechargement_echoue.titre"), langues.t(
+            "moteur.telechargement_echoue.msg",
+            modele=nom_court(modele), taille=taille_annoncee(modele),
+            requis=langues.octets(requis)))
+    journal.info("Modèle %s complet : %s", nom_court(modele), apres.get("snapshot"))
+    return apres
+
+
+def chemin_instanciation(modele: str) -> str:
+    """
+    Chemin réellement passé à faster-whisper.
+
+    Un modèle complet est désigné par son DOSSIER : faster-whisper prend alors la
+    branche « dossier local » et ne joint jamais le réseau. Désigné par son nom de
+    dépôt, il passerait au contraire par `snapshot_download`, donc par une requête
+    au hub à chaque chargement, hors ligne comprise.
+    """
+    try:
+        etat = etat_modele(modele)
+    except Exception:
+        return modele
+    if etat.get("etat") == "complet" and etat.get("snapshot"):
+        return str(etat["snapshot"])
+    return modele
+
+
 class MoteurTranscription:
     """Enveloppe autour de WhisperModel, avec libération explicite."""
 
@@ -355,6 +604,10 @@ class MoteurTranscription:
         self.forcer_processeur = forcer_processeur
         self._modele = None
         self._nom_modele = ""
+        #: Modèles déjà effacés puis redescendus par le filet de sécurité. Une
+        #: fois par modèle et par file de traitement, jamais deux : sans cette
+        #: mémoire, chaque fichier de la file relançait la même réparation.
+        self._reparations: set[str] = set()
 
     # -- cycle de vie ------------------------------------------------------
 
@@ -375,16 +628,12 @@ class MoteurTranscription:
 
         chemins.assurer_dossiers()
 
-        # Un modèle laissé à moitié téléchargé est réparé avant tout appel à
-        # faster-whisper : sans cela, il lève un RuntimeError illisible sur
-        # « model.bin » et la file s'arrête sur un incident que l'utilisateur ne
-        # peut résoudre que depuis un terminal.
-        etat = etat_modele(modele)
-        if etat["etat"] == "incomplet" and etat["reparable"]:
-            reparer_modele(modele, etat, signaler)
-        elif etat["etat"] == "absent" and signaler:
-            signaler("attention", langues.t(
-                "moteur.premier_usage", taille=taille_annoncee(modele)))
+        # Les poids sont descendus et VÉRIFIÉS avant tout appel à faster-whisper.
+        # Un téléchargement qui échoue s'arrête ici, sur une phrase en français :
+        # sans cette garde, CTranslate2 lève un RuntimeError sur « model.bin » qui
+        # ne dit rien de la vraie cause, et que l'utilisateur ne peut résoudre que
+        # depuis un terminal.
+        etat = assurer_modele_telecharge(modele, etat_modele(modele), signaler)
 
         journal.info(
             "Chargement du modèle %s (périphérique=%s, calcul=%s, fils=%s, état=%s)",
@@ -397,13 +646,17 @@ class MoteurTranscription:
         try:
             self._modele = self._instancier(modele)
         except Exception as exc:
-            # Filet de sécurité : une forme de cache que la détection n'aurait
-            # pas su lire se trahit ici. Une seule reprise, jamais de boucle.
-            if not _poids_illisible(exc) or not modele_supprimable(modele):
+            # Filet de sécurité : des poids que la vérification croit sains mais
+            # que CTranslate2 refuse d'ouvrir. On efface et l'on redescend, une
+            # fois par modèle et par file. Jamais de boucle.
+            if (not _poids_illisible(exc) or not modele_supprimable(modele)
+                    or modele in self._reparations):
                 journal.exception(f"Chargement du modèle {modele} impossible", exc)
                 raise
+            self._reparations.add(modele)
             journal.attention("Poids illisibles au chargement, réparation puis nouvel essai")
             reparer_modele(modele, signaler=signaler)
+            assurer_modele_telecharge(modele, None, signaler, annoncer=False)
             try:
                 self._modele = self._instancier(modele)
             except Exception as second:
@@ -416,7 +669,7 @@ class MoteurTranscription:
 
         with journal.SortieMuette("chargement du modèle"):
             return WhisperModel(
-                modele,
+                chemin_instanciation(modele),
                 device=self.peripherique,
                 compute_type=self.type_calcul,
                 cpu_threads=self.materiel.fils_calcul,

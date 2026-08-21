@@ -20,11 +20,14 @@ ce soit et **sans le moindre appel réseau** :
      l'initialisation de l'objet ;
   7. l'amorce du glossaire, dont l'en-tête suit la langue parlée et non celle
      de l'interface, et son budget de jetons ;
-  8. l'autoréparation d'un modèle laissé incomplet par un téléchargement
-     interrompu : de faux dossiers de cache sont fabriqués pour l'occasion, la
-     détection les reconnaît, la suppression n'emporte que le bon dossier, et
-     le chargement enchaîne sur un nouveau téléchargement. Rien n'est
-     réellement téléchargé, le moteur est simulé.
+  8. le téléchargement des poids et l'autoréparation d'un modèle laissé
+     incomplet : de faux dossiers de cache sont fabriqués pour l'occasion, la
+     détection les reconnaît, la suppression n'emporte que le bon dossier, un
+     modèle complet ne provoque AUCUN appel réseau, un téléchargement qui rend
+     un dossier sans « model.bin » lève une erreur en français au lieu d'un
+     traceback, le manque de place est vu avant de commencer, et la réparation
+     n'a lieu qu'une fois par modèle. Rien n'est réellement téléchargé, le
+     moteur comme le réseau sont simulés.
 
 Rien de ce que fait ce script ne touche à l'installation : tout se passe dans
 un dossier temporaire, effacé à la fin.
@@ -45,7 +48,8 @@ RACINE = Path(__file__).resolve().parent.parent
 if str(RACINE) not in sys.path:
     sys.path.insert(0, str(RACINE))
 
-from app import langues, maj, nommage, stockage, surveillance, vocabulaire  # noqa: E402
+from app import (  # noqa: E402
+    langues, maj, nommage, presets, stockage, surveillance, vocabulaire)
 
 # Ces contrôles comparent des chaînes produites par l'application : ils fixent
 # donc la langue d'interface, sans quoi leur résultat dépendrait de la langue de
@@ -719,26 +723,135 @@ def essai_modele_incomplet(base: Path) -> None:
     verifier(moteur.etat_modele(DEPOT_ABIME, racine)["etat"] == "absent",
              "une fois réparé, le modèle est simplement « absent », donc à télécharger")
 
-    # -- le chargement enchaîne réparation puis téléchargement ---------------
+    # -- téléchargement mené par l'application ------------------------------
+    #
+    # Rien n'est jamais descendu ici : `_telecharger` et le test de connexion
+    # sont remplacés, et l'on compte leurs appels. C'est ce comptage qui prouve
+    # la promesse du hors-ligne, autant que le bon enchaînement des étapes.
     ancien = chemins.DOSSIER_MODELES
+    ancien_telecharger = moteur._telecharger
+    ancien_connexion = moteur.connexion_disponible
+    ancienne_place = moteur.espace_libre_octets
     chemins.DOSSIER_MODELES = racine
     appels: list[str] = []
     messages: list[tuple[str, str]] = []
+    reseau: list[str] = []
+
+    def journal_ui(niveau: str, texte: str) -> None:
+        messages.append((niveau, texte))
+
+    def derniers_textes() -> str:
+        return " | ".join(texte for _, texte in messages)
+
     try:
+        moteur.connexion_disponible = lambda delai=4.0: (
+            reseau.append("test") or True)
+        # Place disponible fixée, sinon le résultat dépendrait du disque du poste
+        # qui exécute le contrôle. Le cas du disque plein est traité plus bas.
+        moteur.espace_libre_octets = lambda dossier: 50 * 1024 ** 3
+
+        # -- un modèle complet ne touche à rien --------------------------
+        reseau.clear()
+        moteur._telecharger = lambda modele: reseau.append("telechargement")
+        etat = moteur.assurer_modele_telecharge(DEPOT_SAIN, signaler=journal_ui)
+        verifier(etat["etat"] == "complet" and not reseau,
+                 "un modèle complet en local ne déclenche aucun appel réseau",
+                 str(reseau))
+        verifier(moteur.chemin_instanciation(DEPOT_SAIN).endswith("0" * 40),
+                 "un modèle complet est instancié par son dossier, jamais par son nom",
+                 moteur.chemin_instanciation(DEPOT_SAIN))
+        verifier(moteur.chemin_instanciation("Systran/faster-whisper-tiny")
+                 == "Systran/faster-whisper-tiny",
+                 "un modèle absent reste désigné par son nom de dépôt")
+
+        # -- le téléchargement rend un dossier sans model.bin -------------
+        #
+        # C'est le cas de production du 21 août : huggingface se replie en
+        # silence sur le cache et rend un dossier partiel. Plus question
+        # d'instancier là-dessus.
+        messages.clear()
+        moteur._telecharger = lambda modele: str(
+            _fabriquer_modele(racine, DEPOT_ABIME, None))
+        try:
+            moteur.assurer_modele_telecharge("large-v3", signaler=journal_ui)
+            verifier(False, "un téléchargement sans model.bin lève une erreur métier")
+        except moteur.EchecTelechargement as exc:
+            verifier(True, "un téléchargement sans model.bin lève une erreur métier")
+            verifier("large-v3" in exc.message and "3,1 Go" in exc.message,
+                     "le message nomme le modèle et son poids", exc.message)
+            verifier("4,0 Go" in exc.message,
+                     "le message chiffre la place nécessaire", exc.message)
+            verifier("model.bin" not in exc.message and "Unable" not in exc.message,
+                     "aucun jargon technique ne remonte à l'écran", exc.message)
+        except Exception as exc:
+            verifier(False, "un téléchargement sans model.bin lève une erreur métier",
+                     f"{type(exc).__name__}: {exc}")
+        verifier(any(niveau == "erreur" for niveau, _ in messages),
+                 "l'échec est aussi porté au journal de l'interface", derniers_textes())
+        verifier(abime.is_dir(),
+                 "le dossier partiel est CONSERVÉ, la reprise doit rester possible")
+
+        # -- espace disque insuffisant, détecté avant de télécharger -------
+        messages.clear()
+        reseau.clear()
+        moteur.espace_libre_octets = lambda dossier: 900 * 1024 ** 2
+        moteur._telecharger = lambda modele: reseau.append("telechargement")
+        try:
+            moteur.assurer_modele_telecharge("large-v3", signaler=journal_ui)
+            verifier(False, "un disque trop plein lève une erreur métier")
+        except moteur.EchecTelechargement as exc:
+            verifier(True, "un disque trop plein lève une erreur métier")
+            verifier("900 Mo" in exc.message and "4,0 Go" in exc.message,
+                     "le message oppose la place restante à la place nécessaire",
+                     exc.message)
+        verifier(not reseau, "rien n'est téléchargé quand la place manque", str(reseau))
+        moteur.espace_libre_octets = lambda dossier: 50 * 1024 ** 3
+
+        # -- dépôt injoignable --------------------------------------------
+        messages.clear()
+        reseau.clear()
+        moteur.connexion_disponible = lambda delai=4.0: False
+        try:
+            moteur.assurer_modele_telecharge("large-v3", signaler=journal_ui)
+            verifier(False, "un dépôt injoignable lève une erreur métier")
+        except moteur.EchecTelechargement as exc:
+            verifier(True, "un dépôt injoignable lève une erreur métier")
+            verifier("connexion" in exc.message.lower(),
+                     "le message parle de la connexion Internet", exc.message)
+        verifier(not reseau, "rien n'est téléchargé sans réseau", str(reseau))
+        moteur.connexion_disponible = lambda delai=4.0: True
+
+        # -- le chargement complète le modèle puis instancie ---------------
+        messages.clear()
+
+        def telecharger_pour_de_bon(modele: str) -> str:
+            appels.append(modele)
+            dossier = moteur.dossier_cache_modele(modele, racine)
+            snapshot = dossier / "snapshots" / ("0" * 40)
+            snapshot.mkdir(parents=True, exist_ok=True)
+            (snapshot / "config.json").write_text("{}", encoding="utf-8")
+            (snapshot / moteur.NOM_POIDS).write_bytes(
+                b"0" * (moteur.TAILLE_MINIMALE_POIDS + 1))
+            return str(snapshot)
+
+        moteur._telecharger = telecharger_pour_de_bon
+        instances: list[str] = []
         instance = moteur.MoteurTranscription(
             SimpleNamespace(peripherique="cpu", fils_calcul=4), forcer_processeur=True)
-        instance._instancier = lambda modele: appels.append(modele) or "modele-simule"
+        instance._instancier = lambda modele: instances.append(modele) or "modele-simule"
 
-        instance.charger(DEPOT_TRONQUE, lambda niveau, texte: messages.append((niveau, texte)))
-        verifier(not tronque.exists(), "au chargement, le modèle tronqué est effacé")
-        verifier(appels == [DEPOT_TRONQUE], "le téléchargement est bien enchaîné une fois",
+        instance.charger(DEPOT_TRONQUE, journal_ui)
+        verifier(appels == [DEPOT_TRONQUE], "le modèle tronqué est complété une seule fois",
                  str(appels))
+        verifier(tronque.is_dir(),
+                 "son dossier n'est PAS effacé : effacer, c'est perdre la reprise")
+        verifier(instances == [DEPOT_TRONQUE], "le modèle est instancié une seule fois",
+                 str(instances))
         verifier(any("incomplet" in texte for _, texte in messages),
                  "l'interface est prévenue que le modèle était incomplet",
-                 " | ".join(texte for _, texte in messages))
+                 derniers_textes())
 
-        # Filet de sécurité : des poids que la détection croit sains mais que
-        # faster-whisper refuse. Une seule reprise, après réparation.
+        # -- filet de sécurité : des poids que CTranslate2 refuse ----------
         essais = {"n": 0}
 
         def instancier_capricieux(modele: str):
@@ -748,20 +861,48 @@ def essai_modele_incomplet(base: Path) -> None:
                     f"Unable to open file 'model.bin' in model '{complet}'")
             return "modele-simule"
 
+        appels.clear()
         instance.liberer()
         instance._instancier = instancier_capricieux
-        instance.charger(DEPOT_SAIN, lambda niveau, texte: messages.append((niveau, texte)))
+        instance.charger(DEPOT_SAIN, journal_ui)
         verifier(essais["n"] == 2, "un refus sur model.bin déclenche une seule reprise",
                  str(essais["n"]))
-        verifier(not complet.exists(), "le dossier fautif a été renouvelé au passage")
+        verifier(appels == [DEPOT_SAIN],
+                 "la reprise passe par un retéléchargement, une fois", str(appels))
+
+        # Deuxième fichier de la même file, même modèle, même refus : la
+        # réparation ne doit PAS recommencer. C'est ce qui bouclait au journal.
+        essais["n"] = 0
+        appels.clear()
+        instance.liberer()
+        instance._instancier = instancier_capricieux
+        try:
+            instance.charger(DEPOT_SAIN, journal_ui)
+            verifier(False, "le refus remonte au lieu de relancer la réparation")
+        except RuntimeError:
+            verifier(True, "le refus remonte au lieu de relancer la réparation")
+        verifier(essais["n"] == 1 and not appels,
+                 "un seul essai, aucune réparation de plus dans la même file",
+                 f"essais={essais['n']} appels={appels}")
     finally:
         chemins.DOSSIER_MODELES = ancien
+        moteur._telecharger = ancien_telecharger
+        moteur.connexion_disponible = ancien_connexion
+        moteur.espace_libre_octets = ancienne_place
         chemins.confiner_cache_huggingface()
 
     verifier(moteur._poids_illisible(RuntimeError("Unable to open file 'model.bin'")),
              "l'erreur de faster-whisper est reconnue")
     verifier(not moteur._poids_illisible(OSError("disque plein")),
              "une erreur sans rapport ne déclenche pas de réparation")
+    verifier(moteur._manque_de_place(OSError(28, "No space left on device")),
+             "un disque plein est reconnu comme tel")
+    verifier(not moteur._manque_de_place(OSError("Connection reset by peer")),
+             "une coupure réseau n'est pas prise pour un disque plein")
+    verifier(moteur.poids_attendu_octets("large-v3") == int(3.1 * 1024 ** 3),
+             "le poids attendu de large-v3 est connu")
+    verifier(moteur.poids_attendu_octets(presets.MODELE_TURBO) == int(1.6 * 1024 ** 3),
+             "celui du modèle turbo aussi, le préréglage Rapide reste couvert")
 
 
 def essai_amorce() -> None:

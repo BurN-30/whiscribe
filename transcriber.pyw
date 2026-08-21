@@ -1169,9 +1169,9 @@ class Passerelle:
         l'obtenir (pas de réseau, pas de place), sinon None. Quand le modèle
         manque mais que tout est réuni, on se contente d'annoncer la taille.
 
-        Un modèle incomplet suit exactement le même chemin : il sera effacé puis
-        retéléchargé au chargement, ce sont donc les mêmes contrôles de place et
-        de réseau qui valent, avec d'autres mots.
+        Un modèle incomplet suit exactement le même chemin : il sera complété au
+        chargement, ce sont donc les mêmes contrôles de place et de réseau qui
+        valent, avec d'autres mots.
         """
         from app import moteur
 
@@ -1196,11 +1196,11 @@ class Passerelle:
                     dossier=dossier, probleme=probleme),
             }
 
+        # Le besoin est celui que retiendra le moteur au téléchargement : les
+        # deux contrôles doivent dire la même chose, y compris pour les modèles
+        # du mode avancé, que l'ancien calcul laissait passer sans rien vérifier.
         libre = chemins.espace_libre_go(dossier)
-        requis = 0.0
-        for p in presets.PRESETS.values():
-            if p["modele"] == modele:
-                requis = p["telechargement_go"] * 1.3
+        requis = moteur.poids_attendu_octets(modele) * moteur.MARGE_DISQUE / 1024 ** 3
         if libre and requis and libre < requis:
             return {
                 "ok": False,

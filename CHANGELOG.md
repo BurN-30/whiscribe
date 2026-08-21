@@ -6,6 +6,41 @@ version : la chaîne de publication en extrait la section correspondant au tag.
 
 ---
 
+## 2.3.3
+
+*Publiée le 21 août 2026.*
+
+Un téléchargement de modèle qui échoue le dit, et ne recommence pas de zéro.
+
+La réparation automatique livrée en 2.3.1 supprimait bien le dossier d'un
+modèle incomplet, mais le retéléchargement qui suivait pouvait échouer sans
+rien dire : huggingface avale la panne réseau et rend le dossier de cache tel
+quel, poids manquants compris. L'application croyait donc tenir un modèle,
+et l'écran finissait sur « Unable to open file 'model.bin' », un message qui
+parle d'un fichier alors que la cause est une connexion coupée ou un disque
+trop plein.
+
+- **Les poids sont désormais téléchargés par l'application**, et contrôlés
+  juste après. Sans « model.bin » de taille plausible, rien n'est chargé et
+  l'incident est annoncé en français : « Le téléchargement du modèle large-v3
+  (3,1 Go) a échoué. Vérifiez la connexion Internet et l'espace disque (il
+  faut environ 4,0 Go libres), puis relancez le fichier. » Plus aucun message
+  technique brut pour ce cas.
+- **La cause est nommée quand elle est identifiable.** Un disque trop plein
+  est vu AVANT de commencer, et le message oppose la place restante à la
+  place nécessaire. Un dépôt injoignable est annoncé comme tel, avec le
+  rappel qu'une fois téléchargé le modèle reste local.
+- **Un téléchargement coupé reprend où il s'était arrêté.** Le dossier n'est
+  plus effacé avant de retélécharger : un échec à 80 % d'un fichier de 3 Go
+  ne fait plus tout recommencer. Seuls des poids que le moteur refuse
+  d'ouvrir alors qu'ils paraissent sains valent encore un renouvellement du
+  dossier, une fois par modèle et par file de traitement, jamais deux.
+- **Le hors-ligne est tenu par construction.** Un modèle déjà complet est
+  chargé par son dossier, ce qui ne produit plus aucun appel réseau, là où la
+  désignation par nom de dépôt interrogeait le hub à chaque chargement.
+- **Le contrôle de place avant lancement couvre aussi les modèles du mode
+  avancé**, que l'ancien calcul laissait passer sans rien vérifier.
+
 ## 2.3.2
 
 *Publiée le 20 août 2026.*

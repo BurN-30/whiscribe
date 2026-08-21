@@ -245,6 +245,28 @@ _FR: dict[str, str] = {
         "Il est peut-être ouvert par un autre programme. Fermez les autres applications "
         "puis relancez, ou effacez « {dossier} »."
     ),
+    "moteur.telechargement_reprend": (
+        "Le téléchargement du modèle « {modele} » ({taille}) avait été coupé. Il "
+        "reprend où il s'était arrêté, rien de ce qui était déjà reçu n'est perdu."
+    ),
+    "moteur.telechargement_echoue.titre": "Téléchargement du modèle incomplet",
+    "moteur.telechargement_echoue.msg": (
+        "Le téléchargement du modèle {modele} ({taille}) a échoué. Vérifiez la "
+        "connexion Internet et l'espace disque (il faut environ {requis} libres), "
+        "puis relancez le fichier. Ce qui a déjà été reçu est conservé : la "
+        "prochaine tentative repartira de là."
+    ),
+    "moteur.disque_insuffisant": (
+        "Le modèle {modele} demande environ {requis} d'espace libre pour être "
+        "téléchargé, et il n'en reste que {libre} sur le disque des modèles "
+        "({dossier}). Libérez de la place, puis relancez le fichier."
+    ),
+    "moteur.reseau_indisponible": (
+        "Le modèle {modele} ({taille}) n'est pas encore sur cette machine, et le "
+        "dépôt Hugging Face est injoignable. Vérifiez la connexion Internet, puis "
+        "relancez le fichier. Une fois téléchargé, le modèle reste local et "
+        "l'application n'a plus besoin du réseau."
+    ),
     "moteur.chargement": "Chargement du modèle {modele}...",
     "moteur.taille_inconnue": "quelques centaines de Mo à 3 Go",
 
@@ -985,6 +1007,28 @@ _EN: dict[str, str] = {
         "Model \"{modele}\" is incomplete and its folder could not be renewed. It may be "
         "open in another program. Close the other applications and start again, or "
         "delete \"{dossier}\"."
+    ),
+    "moteur.telechargement_reprend": (
+        "The download of model \"{modele}\" ({taille}) had been cut short. It resumes "
+        "where it stopped, nothing already received is lost."
+    ),
+    "moteur.telechargement_echoue.titre": "Model download incomplete",
+    "moteur.telechargement_echoue.msg": (
+        "The download of model {modele} ({taille}) failed. Check your Internet "
+        "connection and disk space (about {requis} free is needed), then start the file "
+        "again. What was already received is kept: the next attempt will resume from "
+        "there."
+    ),
+    "moteur.disque_insuffisant": (
+        "Model {modele} needs about {requis} of free space to be downloaded, and only "
+        "{libre} is left on the models disk ({dossier}). Free up space, then start the "
+        "file again."
+    ),
+    "moteur.reseau_indisponible": (
+        "Model {modele} ({taille}) is not on this machine yet, and the Hugging Face "
+        "repository cannot be reached. Check your Internet connection, then start the "
+        "file again. Once downloaded, the model stays local and the application no "
+        "longer needs the network."
     ),
     "moteur.chargement": "Loading model {modele}...",
     "moteur.taille_inconnue": "a few hundred MB up to 3 GB",
